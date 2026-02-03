@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.svg" width="300em">
+  <img src="logo.svg" width="150em">
 </div>
 
 # bridge
