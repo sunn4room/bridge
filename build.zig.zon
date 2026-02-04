@@ -1,6 +1,20 @@
 .{
     .name = .bridge,
     .version = "0.0.0",
+    .dependencies = .{
+        .wayland = .{
+            .url = "https://codeberg.org/ifreund/zig-wayland/archive/v0.5.0.tar.gz",
+            .hash = "wayland-0.5.0-lQa1knz8AQCh08NA8BeQrwJB9U3CfqcVAdHZYGRKIGuu",
+        },
+        .river = .{
+            .url = "https://codeberg.org/river/river/archive/v0.4.1.tar.gz",
+            .hash = "river-0.4.1-_G6Njv-nCwBebH8tw6eZ3ERv05GLjVkzpFzRGsnpfzgG",
+        },
+        .xkbcommon = .{
+            .url = "https://codeberg.org/ifreund/zig-xkbcommon/archive/v0.4.0.tar.gz",
+            .hash = "xkbcommon-0.4.0-VDqIe0i2AgDRsok2GpMFYJ8SVhQS10_PI2M_CnHXsJJZ",
+        },
+    },
     .fingerprint = 0x69780f9fdcac006b,
     .minimum_zig_version = "0.15.2",
     .paths = .{
