@@ -18,8 +18,32 @@ I have been using dwm for many years. I found that:
 - Dwm primary/stack layout is ugly and useless.
 - Dwm tag system is very powerful but also very attention-demanding.
 
-Bridge is very simple. Bridge has no tag. Bridge manages windows directly. Bridge only sticky what you want.
+Bridge is very simple. Bridge has no tag. Bridge manages windows directly. Bridge only stick what you want.
 
-## Why not Bridge.
+## Why not Bridge?
 
 Bridge is not good at managing more than 10 windows.
+
+## How to use Bridge?
+
+### Dependencies
+
+- wayland
+- xkbcommon
+- zig (build)
+
+### Build
+
+```sh
+zig build -Doptimize=ReleaseSafe --prefix ~/.local install
+```
+
+### Run
+
+```sh
+river -c bridge
+```
+
+## How to config Bridge?
+
+Edit the `src/config.zig` and re-build.
