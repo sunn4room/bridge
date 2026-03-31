@@ -47,8 +47,6 @@ pub const Action = union(enum) {
     swap_window: wl.list.Direction,
     send_window: wl.list.Direction,
     close_window,
-    pointer_move,
-    pointer_resize,
     quit,
 };
 
@@ -57,3 +55,8 @@ pub const Binding = struct {
     trigger: Trigger,
     action: Action,
 };
+
+pub fn spawn(cmd: []const []const u8) void {
+    var child = std.process.Child.init(cmd, std.heap.c_allocator);
+    child.spawn() catch {};
+}

@@ -1,5 +1,4 @@
 const std = @import("std");
-
 const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const river = wayland.client.river;
@@ -21,6 +20,7 @@ fn river_pointer_binding_listener(
     event: river.PointerBindingV1.Event,
     self: *Self,
 ) void {
+    util.log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .pressed => {
             self.seat.action = self.action;
@@ -31,13 +31,13 @@ fn river_pointer_binding_listener(
     }
 }
 
-pub fn inject(handle: *river.PointerBindingV1, seat: *Seat, action: Action) void {
+pub fn inject(handle: *river.PointerBindingV1, action: Action, seat: *Seat) void {
     const pointer_binding = std.heap.c_allocator.create(Self) catch unreachable;
     handle.setListener(*Self, river_pointer_binding_listener, pointer_binding);
     pointer_binding.* = .{
         .handle = handle,
-        .seat = seat,
         .action = action,
+        .seat = seat,
     };
     seat.pointer_bindings.append(pointer_binding);
     util.log.debug("{f} has been created.", .{pointer_binding});

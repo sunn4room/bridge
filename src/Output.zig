@@ -1,5 +1,4 @@
 const std = @import("std");
-
 const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const river = wayland.client.river;
@@ -12,6 +11,7 @@ const Window = @import("Window.zig");
 const Self = @This();
 
 handle: *river.OutputV1,
+layer_shell_output: *river.LayerShellOutputV1,
 window_manager: *WindowManager,
 link: wl.list.Link = undefined,
 dirty: bool = false,
@@ -25,26 +25,44 @@ fn river_output_listener(
     event: river.OutputV1.Event,
     self: *Self,
 ) void {
+    util.log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .removed => {
             self.destroy();
         },
-        .position => |data| {
-            self.x = data.x;
-            self.y = data.y;
+        else => {
+            util.log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
         },
-        .dimensions => |data| {
-            self.width = data.width;
-            self.height = data.height;
+    }
+}
+
+fn river_layer_shell_output_listener(
+    _: *river.LayerShellOutputV1,
+    event: river.LayerShellOutputV1.Event,
+    self: *Self,
+) void {
+    util.log.debug("{f} received {s} event.", .{ self, @tagName(event) });
+    switch (event) {
+        .non_exclusive_area => |area| {
+            self.x = area.x;
+            self.y = area.y;
+            self.width = area.width;
+            self.height = area.height;
+            self.dirty = true;
         },
-        else => {},
     }
 }
 
 pub fn inject(handle: *river.OutputV1, window_manager: *WindowManager) void {
     const output = std.heap.c_allocator.create(Self) catch unreachable;
-    output.* = .{ .handle = handle, .window_manager = window_manager };
     handle.setListener(*Self, river_output_listener, output);
+    const layer_shell_output = window_manager.bridge.layer_shell_manager.?.handle.getOutput(handle) catch unreachable;
+    layer_shell_output.setListener(*Self, river_layer_shell_output_listener, output);
+    output.* = .{
+        .handle = handle,
+        .layer_shell_output = layer_shell_output,
+        .window_manager = window_manager,
+    };
     window_manager.outputs.append(output);
     var window_iterator = window_manager.windows.iterator(.forward);
     while (window_iterator.next()) |window| if (window.output == null) window.send(output);
@@ -58,6 +76,7 @@ pub fn destroy(self: *Self) void {
     var window_iterator = self.window_manager.windows.iterator(.forward);
     while (window_iterator.next()) |window| if (window.output == self) window.send(fallback_output);
     self.handle.destroy();
+    self.layer_shell_output.destroy();
     std.heap.c_allocator.destroy(self);
 }
 
@@ -81,7 +100,7 @@ pub fn manage(self: *Self) void {
     if (self.x == null or self.y == null or self.width == null or self.height == null) return;
 
     if (self.dirty) {
-        util.log.debug("{f} is dirty.", .{self});
+        defer util.log.debug("{f} has updated state.", .{self});
 
         _ = self.layout(&self.window_manager.windows.link, 0);
         self.dirty = false;

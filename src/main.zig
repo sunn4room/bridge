@@ -5,66 +5,47 @@ const river = wayland.client.river;
 
 const util = @import("util.zig");
 const Bridge = @import("Bridge.zig");
+const WindowManager = @import("WindowManager.zig");
+const XkbBindingManager = @import("XkbBindingManager.zig");
+const LayerShellManager = @import("LayerShellManager.zig");
 
-const Global = struct {
-    river_window_manager: ?*river.WindowManagerV1 = null,
-    river_window_manager_name: ?u32 = null,
-    river_xkb_bindings: ?*river.XkbBindingsV1 = null,
-    river_xkb_bindings_name: ?u32 = null,
-    river_layer_shell: ?*river.LayerShellV1 = null,
-    river_layer_shell_name: ?u32 = null,
-};
-
-fn wayland_display_registry_listener(
-    registry: *wl.Registry,
-    event: wl.Registry.Event,
-    global: *Global,
-) void {
+fn wayland_display_registry_listener(registry: *wl.Registry, event: wl.Registry.Event, bridge: *Bridge) void {
     switch (event) {
-        .global => |data| {
-            if (std.mem.orderZ(u8, data.interface, river.WindowManagerV1.interface.name) == .eq) {
-                global.river_window_manager = registry.bind(data.name, river.WindowManagerV1, 4) catch unreachable;
-                global.river_window_manager_name = data.name;
-            } else if (std.mem.orderZ(u8, data.interface, river.XkbBindingsV1.interface.name) == .eq) {
-                global.river_xkb_bindings = registry.bind(data.name, river.XkbBindingsV1, 2) catch unreachable;
-                global.river_xkb_bindings_name = data.name;
-            } else if (std.mem.orderZ(u8, data.interface, river.LayerShellV1.interface.name) == .eq) {
-                global.river_layer_shell = registry.bind(data.name, river.LayerShellV1, 1) catch unreachable;
-                global.river_layer_shell_name = data.name;
+        .global => |global| {
+            if (std.mem.orderZ(u8, global.interface, river.WindowManagerV1.interface.name) == .eq) {
+                const window_manager_handle = registry.bind(global.name, river.WindowManagerV1, 4) catch unreachable;
+                WindowManager.inject(window_manager_handle, global.name, bridge);
+            } else if (std.mem.orderZ(u8, global.interface, river.XkbBindingsV1.interface.name) == .eq) {
+                const xkb_binding_manager_handle = registry.bind(global.name, river.XkbBindingsV1, 2) catch unreachable;
+                XkbBindingManager.inject(xkb_binding_manager_handle, global.name, bridge);
+            } else if (std.mem.orderZ(u8, global.interface, river.LayerShellV1.interface.name) == .eq) {
+                const layer_shell_manager_handle = registry.bind(global.name, river.LayerShellV1, 1) catch unreachable;
+                LayerShellManager.inject(layer_shell_manager_handle, global.name, bridge);
             }
         },
-        .global_remove => |data| {
-            if (data.name == global.river_window_manager_name or data.name == global.river_xkb_bindings_name or data.name == global.river_layer_shell_name) unreachable;
+        .global_remove => |global| {
+            if (bridge.window_manager != null and bridge.window_manager.?.handle_name == global.name) {
+                bridge.window_manager.?.destroy();
+            } else if (bridge.xkb_binding_manager != null and bridge.xkb_binding_manager.?.handle_name == global.name) {
+                bridge.xkb_binding_manager.?.destroy();
+            } else if (bridge.layer_shell_manager != null and bridge.layer_shell_manager.?.handle_name == global.name) {
+                bridge.layer_shell_manager.?.destroy();
+            }
         },
     }
 }
 
-pub fn main() !void {
-    const wayland_display = try wl.Display.connect(null);
-    defer wayland_display.disconnect();
+pub fn main() void {
+    const wayland_display = wl.Display.connect(null) catch return;
+
+    util.log.info("Welcome!", .{});
+    defer util.log.info("Bye!", .{});
+
+    const bridge = Bridge.create();
+    defer bridge.destroy();
 
     const wayland_display_registry = wayland_display.getRegistry() catch unreachable;
-    defer wayland_display_registry.destroy();
-
-    var global: Global = .{};
-    wayland_display_registry.setListener(*Global, wayland_display_registry_listener, &global);
-    if (wayland_display.roundtrip() != .SUCCESS) unreachable;
-
-    const window_manager_handle = global.river_window_manager orelse return error.RiverWindowManagerNotAdvertised;
-    errdefer window_manager_handle.destroy();
-    const xkb_binding_manager_handle = global.river_xkb_bindings orelse return error.RiverXkbBindingsNotAdvertised;
-    errdefer xkb_binding_manager_handle.destroy();
-    const layer_shell_manager = global.river_window_manager orelse return error.RiverLayerShellNotAdvertised;
-    errdefer layer_shell_manager.destroy();
-
-    util.log.debug("Welcome!", .{});
-    defer util.log.debug("Bye!", .{});
-
-    const bridge = Bridge.create(
-        window_manager_handle,
-        xkb_binding_manager_handle,
-    );
-    defer bridge.destroy();
+    wayland_display_registry.setListener(*Bridge, wayland_display_registry_listener, bridge);
 
     while (bridge.running) {
         if (wayland_display.dispatch() != .SUCCESS) unreachable;

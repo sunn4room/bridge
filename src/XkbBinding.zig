@@ -1,9 +1,7 @@
 const std = @import("std");
-
 const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const river = wayland.client.river;
-const xkbcommon = @import("xkbcommon");
 
 const util = @import("util.zig");
 const Binding = util.Binding;
@@ -22,6 +20,7 @@ fn river_xkb_binding_listener(
     event: river.XkbBindingV1.Event,
     self: *Self,
 ) void {
+    util.log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .pressed => {
             self.seat.action = self.action;
@@ -32,13 +31,13 @@ fn river_xkb_binding_listener(
     }
 }
 
-pub fn inject(handle: *river.XkbBindingV1, seat: *Seat, action: Action) void {
+pub fn inject(handle: *river.XkbBindingV1, action: Action, seat: *Seat) void {
     const xkb_binding = std.heap.c_allocator.create(Self) catch unreachable;
     handle.setListener(*Self, river_xkb_binding_listener, xkb_binding);
     xkb_binding.* = .{
         .handle = handle,
-        .seat = seat,
         .action = action,
+        .seat = seat,
     };
     seat.xkb_bindings.append(xkb_binding);
     util.log.debug("{f} has been created.", .{xkb_binding});

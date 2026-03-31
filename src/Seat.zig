@@ -1,21 +1,16 @@
 const std = @import("std");
-
 const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const river = wayland.client.river;
-const Modifiers = river.SeatV1.Modifiers;
-const xkbcommon = @import("xkbcommon");
-const Keysym = xkbcommon.Keysym;
 
+const config = @import("config.zig");
 const util = @import("util.zig");
 const Binding = util.Binding;
 const Action = util.Action;
-const config = @import("config.zig");
 const WindowManager = @import("WindowManager.zig");
 const XkbBindingManager = @import("XkbBindingManager.zig");
 const XkbBinding = @import("XkbBinding.zig");
 const PointerBinding = @import("PointerBinding.zig");
-const Output = @import("Output.zig");
 const Window = @import("Window.zig");
 
 const Self = @This();
@@ -36,28 +31,36 @@ fn river_seat_listener(
     event: river.SeatV1.Event,
     self: *Self,
 ) void {
+    util.log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
-        .removed => self.destroy(),
-        else => util.log.debug("{f} ignored {s} event.", .{ self, @tagName(event) }),
+        .removed => {
+            self.destroy();
+        },
+        else => {
+            util.log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
+        },
     }
 }
 
 pub fn inject(handle: *river.SeatV1, window_manager: *WindowManager) void {
     const seat = std.heap.c_allocator.create(Self) catch unreachable;
-    seat.* = .{ .handle = handle, .window_manager = window_manager };
+    seat.* = .{
+        .handle = handle,
+        .window_manager = window_manager,
+    };
     handle.setListener(*Self, river_seat_listener, seat);
     seat.xkb_bindings.init();
     seat.pointer_bindings.init();
     for (config.bindings) |binding| {
         switch (binding.trigger) {
             .keysym => |keysym| {
-                const xkb_binding_manager = window_manager.bridge.xkb_binding_manager;
+                const xkb_binding_manager = window_manager.bridge.xkb_binding_manager.?;
                 const xkb_binding_handle = xkb_binding_manager.handle.getXkbBinding(seat.handle, @intFromEnum(keysym), binding.modifiers) catch unreachable;
-                XkbBinding.inject(xkb_binding_handle, seat, binding.action);
+                XkbBinding.inject(xkb_binding_handle, binding.action, seat);
             },
             .button => |button| {
                 const pointer_binding_handle = seat.handle.getPointerBinding(@intFromEnum(button), binding.modifiers) catch unreachable;
-                PointerBinding.inject(pointer_binding_handle, seat, binding.action);
+                PointerBinding.inject(pointer_binding_handle, binding.action, seat);
             },
         }
     }
@@ -106,8 +109,10 @@ pub fn manage(self: *Self) void {
             if (self.enabled) self.disable() else self.enable();
         },
         .spawn => |cmd| {
-            var child = std.process.Child.init(cmd, std.heap.c_allocator);
-            child.spawn() catch {};
+            util.spawn(cmd);
+        },
+        .change_window_weight => |step| {
+            if (self.window) |window| window.changeWeight(step);
         },
         .toggle_window_sticky => |force| {
             if (self.window) |window| {
@@ -198,8 +203,9 @@ pub fn manage(self: *Self) void {
         .close_window => {
             if (self.window) |window| window.close();
         },
-        .quit => self.window_manager.quit(),
-        else => util.log.debug("{f} ignored {s} action.", .{ self, @tagName(self.action) }),
+        .quit => {
+            self.window_manager.quit();
+        },
     }
     self.action = .nop;
 }

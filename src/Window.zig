@@ -1,11 +1,10 @@
 const std = @import("std");
-
 const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const river = wayland.client.river;
 
-const util = @import("util.zig");
 const config = @import("config.zig");
+const util = @import("util.zig");
 const WindowManager = @import("WindowManager.zig");
 const Output = @import("Output.zig");
 
@@ -29,6 +28,7 @@ fn river_window_listener(
     event: river.WindowV1.Event,
     self: *Self,
 ) void {
+    util.log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .closed => {
             self.destroy();
@@ -100,7 +100,7 @@ pub fn manage(self: *Self) void {
     }
 
     if (self.dirty) {
-        util.log.debug("{f} is dirty.", .{self});
+        defer util.log.debug("{f} has updated state.", .{self});
 
         self.focused = false;
         var seat_iterator = self.window_manager.seats.iterator(.forward);

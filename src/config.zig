@@ -11,12 +11,6 @@ pub const border_width: i32 = 2;
 pub const border_normal = color_selection;
 pub const border_focused = color_theme;
 
-pub const fallback_icon: []const u8 = "";
-pub const icon_chromium: []const u8 = "";
-pub const icon_firefox: []const u8 = "";
-pub const icon_foot: []const u8 = "";
-pub const icon_footclient: []const u8 = "";
-
 const terminal = "foot";
 const launcher = "fuzzel";
 
@@ -150,16 +144,6 @@ pub const bindings: []const Binding = &.{
         .modifiers = .{ .mod1 = true },
         .trigger = .{ .keysym = .d },
         .action = .close_window,
-    },
-    .{
-        .modifiers = .{ .mod1 = true },
-        .trigger = .{ .button = .left },
-        .action = .pointer_move,
-    },
-    .{
-        .modifiers = .{ .mod1 = true },
-        .trigger = .{ .button = .right },
-        .action = .pointer_resize,
     },
     .{
         .modifiers = .{ .mod1 = true, .shift = true },
