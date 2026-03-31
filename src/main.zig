@@ -9,7 +9,11 @@ const WindowManager = @import("WindowManager.zig");
 const XkbBindingManager = @import("XkbBindingManager.zig");
 const LayerShellManager = @import("LayerShellManager.zig");
 
-fn wayland_display_registry_listener(registry: *wl.Registry, event: wl.Registry.Event, bridge: *Bridge) void {
+fn wayland_display_registry_listener(
+    registry: *wl.Registry,
+    event: wl.Registry.Event,
+    bridge: *Bridge,
+) void {
     switch (event) {
         .global => |global| {
             if (std.mem.orderZ(u8, global.interface, river.WindowManagerV1.interface.name) == .eq) {

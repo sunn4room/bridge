@@ -17,7 +17,6 @@ const Self = @This();
 
 handle: *river.SeatV1,
 window_manager: *WindowManager,
-
 link: wl.list.Link = undefined,
 new: bool = true,
 xkb_bindings: wl.list.Head(XkbBinding, .link) = undefined,
@@ -204,7 +203,7 @@ pub fn manage(self: *Self) void {
             if (self.window) |window| window.close();
         },
         .quit => {
-            self.window_manager.quit();
+            self.window_manager.bridge.running = false;
         },
     }
     self.action = .nop;

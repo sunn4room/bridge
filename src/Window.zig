@@ -41,7 +41,11 @@ fn river_window_listener(
 
 pub fn inject(handle: *river.WindowV1, window_manager: *WindowManager) void {
     const window = std.heap.c_allocator.create(Self) catch unreachable;
-    window.* = .{ .handle = handle, .node = handle.getNode() catch unreachable, .window_manager = window_manager };
+    window.* = .{
+        .handle = handle,
+        .node = handle.getNode() catch unreachable,
+        .window_manager = window_manager,
+    };
     handle.setListener(*Self, river_window_listener, window);
     var output: ?*Output = null;
     if (window_manager.windows.last()) |last_window| {
@@ -111,9 +115,23 @@ pub fn manage(self: *Self) void {
             }
         }
         if (self.focused) {
-            self.handle.setBorders(.{ .top = true, .bottom = true, .left = true, .right = true }, config.border_width, config.border_focused.r, config.border_focused.g, config.border_focused.b, config.border_focused.a);
+            self.handle.setBorders(
+                .{ .top = true, .bottom = true, .left = true, .right = true },
+                config.border_width,
+                config.border_focused.r,
+                config.border_focused.g,
+                config.border_focused.b,
+                config.border_focused.a,
+            );
         } else {
-            self.handle.setBorders(.{ .top = true, .bottom = true, .left = true, .right = true }, config.border_width, config.border_normal.r, config.border_normal.g, config.border_normal.b, config.border_normal.a);
+            self.handle.setBorders(
+                .{ .top = true, .bottom = true, .left = true, .right = true },
+                config.border_width,
+                config.border_normal.r,
+                config.border_normal.g,
+                config.border_normal.b,
+                config.border_normal.a,
+            );
         }
         if (self.focused or self.sticky) {
             self.handle.show();

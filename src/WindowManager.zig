@@ -93,7 +93,3 @@ pub fn destroy(self: *Self) void {
 pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
     try writer.print("window_manager#{d}", .{self.handle.getId()});
 }
-
-pub fn quit(self: *Self) void {
-    self.handle.exitSession();
-}
