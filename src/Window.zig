@@ -22,6 +22,7 @@ visible: bool = false,
 output: ?*Output = null,
 weight: i32 = 5,
 sticky: bool = false,
+lock: bool = false,
 
 fn river_window_listener(
     _: *river.WindowV1,
@@ -139,9 +140,11 @@ pub fn changeWeight(self: *Self, step: i32) void {
     }
 }
 
-pub fn toggleSticky(self: *Self) void {
-    self.sticky = !self.sticky;
+pub fn setSticky(self: *Self, sticky: bool) void {
+    if (self.sticky == sticky) return;
+    self.sticky = sticky;
     if (!self.focused) {
+        self.dirty = true;
         if (self.output) |output| output.dirty = true;
     }
 }

@@ -109,8 +109,25 @@ pub fn manage(self: *Self) void {
             var child = std.process.Child.init(cmd, std.heap.c_allocator);
             child.spawn() catch {};
         },
-        .toggle_window_sticky => {
-            if (self.window) |window| window.toggleSticky();
+        .toggle_window_sticky => |force| {
+            if (self.window) |window| {
+                if (window.output) |output| {
+                    if (window.sticky) {
+                        var window_iterator = self.window_manager.windows.iterator(.forward);
+                        while (window_iterator.next()) |each_window| {
+                            if (each_window.output == output) {
+                                if (force or each_window == window or !each_window.lock) {
+                                    each_window.setSticky(false);
+                                    each_window.lock = false;
+                                }
+                            }
+                        }
+                    } else {
+                        window.setSticky(true);
+                        window.lock = force;
+                    }
+                }
+            }
         },
         .focus_window => |index| {
             if (self.window) |window| {
