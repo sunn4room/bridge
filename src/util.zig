@@ -36,7 +36,6 @@ pub const Trigger = union(enum) {
 };
 
 pub const Action = union(enum) {
-    nop,
     toggle_passthrough,
     spawn: []const []const u8,
     change_window_weight: i32,

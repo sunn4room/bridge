@@ -4,52 +4,50 @@ const wl = wayland.client.wl;
 const river = wayland.client.river;
 
 const util = @import("util.zig");
+const log = util.log;
 const Binding = util.Binding;
 const Action = util.Action;
 const Seat = @import("Seat.zig");
 
 const Self = @This();
 
-handle: *river.XkbBindingV1,
 seat: *Seat,
+river_xkb_binding: *river.XkbBindingV1,
 action: Action,
 link: wl.list.Link = undefined,
 
-fn river_xkb_binding_listener(
-    _: *river.XkbBindingV1,
-    event: river.XkbBindingV1.Event,
-    self: *Self,
-) void {
-    util.log.debug("{f} received {s} event.", .{ self, @tagName(event) });
+pub fn bind(seat: *Seat, river_xkb_binding: *river.XkbBindingV1, action: Action) void {
+    const self = std.heap.c_allocator.create(Self) catch unreachable;
+    river_xkb_binding.setListener(*Self, river_xkb_binding_listener, self);
+    self.* = .{
+        .seat = seat,
+        .river_xkb_binding = river_xkb_binding,
+        .action = action,
+    };
+    self.link.init();
+    seat.xkb_bindings.append(self);
+    log.debug("{f} has been created.", .{self});
+}
+
+pub fn destroy(self: *Self) void {
+    log.debug("{f} is about to be destroyed.", .{self});
+    self.link.remove();
+    self.river_xkb_binding.destroy();
+    std.heap.c_allocator.destroy(self);
+}
+
+fn river_xkb_binding_listener(_: *river.XkbBindingV1, event: river.XkbBindingV1.Event, self: *Self) void {
+    log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .pressed => {
             self.seat.action = self.action;
         },
-        else => {
-            util.log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
+        .released => {
+            log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
         },
     }
 }
 
-pub fn inject(handle: *river.XkbBindingV1, action: Action, seat: *Seat) void {
-    const xkb_binding = std.heap.c_allocator.create(Self) catch unreachable;
-    handle.setListener(*Self, river_xkb_binding_listener, xkb_binding);
-    xkb_binding.* = .{
-        .handle = handle,
-        .action = action,
-        .seat = seat,
-    };
-    seat.xkb_bindings.append(xkb_binding);
-    util.log.debug("{f} has been created.", .{xkb_binding});
-}
-
-pub fn destroy(self: *Self) void {
-    util.log.debug("{f} is about to be destroyed.", .{self});
-    self.handle.destroy();
-    self.link.remove();
-    std.heap.c_allocator.destroy(self);
-}
-
-pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-    try writer.print("xkb_binding#{d}", .{self.handle.getId()});
+pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+    try writer.print("xkb_binding#{d}", .{self.river_xkb_binding.getId()});
 }

@@ -11,8 +11,12 @@ pub const border_width: i32 = 2;
 pub const border_normal = color_selection;
 pub const border_focused = color_theme;
 
-const terminal = "foot";
-const launcher = "fuzzel";
+pub const startup_cmds: []const []const []const u8 = &.{
+    &.{ "sh", "-c", "swaybg -m fill -i ~/.config/wallpaper" },
+};
+
+pub const terminal = "foot";
+pub const launcher = "fuzzel";
 
 pub const bindings: []const Binding = &.{
     .{

@@ -14,6 +14,18 @@
             .url = "https://codeberg.org/ifreund/zig-xkbcommon/archive/v0.4.0.tar.gz",
             .hash = "xkbcommon-0.4.0-VDqIe0i2AgDRsok2GpMFYJ8SVhQS10_PI2M_CnHXsJJZ",
         },
+        .@"wayland-protocols" = .{
+            .url = "https://gitlab.freedesktop.org/wayland/wayland-protocols/-/archive/1.47/wayland-protocols-1.47.tar.gz",
+            .hash = "N-V-__8AAFdWDwA0ktbNUi9pFBHCRN4weXIgIfCrVjfGxqgA",
+        },
+        .pixman = .{
+            .url = "https://codeberg.org/ifreund/zig-pixman/archive/v0.3.0.tar.gz",
+            .hash = "pixman-0.3.0-LClMnz2VAAAs7QSCGwLimV5VUYx0JFnX5xWU6HwtMuDX",
+        },
+        .fcft = .{
+            .url = "https://git.sr.ht/~novakane/zig-fcft/archive/v3.0.0.tar.gz",
+            .hash = "fcft-3.0.0-zcx6CxQfAAAOlHFehXv7HwRPcuo7StCjZAtapZbSB6fq",
+        },
     },
     .fingerprint = 0x69780f9fdcac006b,
     .minimum_zig_version = "0.15.2",

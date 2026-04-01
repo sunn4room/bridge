@@ -5,14 +5,15 @@ const river = wayland.client.river;
 
 const config = @import("config.zig");
 const util = @import("util.zig");
+const log = util.log;
 const WindowManager = @import("WindowManager.zig");
 const Output = @import("Output.zig");
 
 const Self = @This();
 
-handle: *river.WindowV1,
-node: *river.NodeV1,
 window_manager: *WindowManager,
+river_window: *river.WindowV1,
+node: *river.NodeV1,
 link: wl.list.Link = undefined,
 new: bool = true,
 dirty: bool = false,
@@ -23,44 +24,30 @@ weight: i32 = 5,
 sticky: bool = false,
 lock: bool = false,
 
-fn river_window_listener(
-    _: *river.WindowV1,
-    event: river.WindowV1.Event,
-    self: *Self,
-) void {
-    util.log.debug("{f} received {s} event.", .{ self, @tagName(event) });
-    switch (event) {
-        .closed => {
-            self.destroy();
-        },
-        else => {
-            util.log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
-        },
-    }
-}
-
-pub fn inject(handle: *river.WindowV1, window_manager: *WindowManager) void {
-    const window = std.heap.c_allocator.create(Self) catch unreachable;
-    window.* = .{
-        .handle = handle,
-        .node = handle.getNode() catch unreachable,
+pub fn bind(window_manager: *WindowManager, river_window: *river.WindowV1) void {
+    const self = std.heap.c_allocator.create(Self) catch unreachable;
+    river_window.setListener(*Self, river_window_listener, self);
+    self.* = .{
         .window_manager = window_manager,
+        .river_window = river_window,
+        .node = river_window.getNode() catch unreachable,
     };
-    handle.setListener(*Self, river_window_listener, window);
+    self.link.init();
+    window_manager.windows.append(self);
     var output: ?*Output = null;
     if (window_manager.windows.last()) |last_window| {
         if (last_window.output) |last_window_output| output = last_window_output;
     }
     if (output == null) output = window_manager.outputs.first();
-    window.send(output);
-    window_manager.windows.append(window);
+    self.send(output);
     var seat_iterator = window_manager.seats.iterator(.forward);
-    while (seat_iterator.next()) |seat| seat.focus(window);
-    util.log.debug("{f} has been created.", .{window});
+    while (seat_iterator.next()) |seat| seat.focus(self);
+    log.debug("{f} has been created.", .{self});
 }
 
 pub fn destroy(self: *Self) void {
-    util.log.debug("{f} is about to be destroyed.", .{self});
+    log.debug("{f} is about to be destroyed.", .{self});
+    self.send(null);
     var fallback: ?*Self = null;
     if (self.output) |output| {
         var each_window = self.iterate(.reverse);
@@ -75,9 +62,8 @@ pub fn destroy(self: *Self) void {
     if (fallback == null) fallback = self.window_manager.windows.last();
     var seat_iterator = self.window_manager.seats.iterator(.forward);
     while (seat_iterator.next()) |seat| if (seat.window == self) seat.focus(fallback);
-    self.send(null);
     self.node.destroy();
-    self.handle.destroy();
+    self.river_window.destroy();
     std.heap.c_allocator.destroy(self);
 }
 
@@ -93,29 +79,25 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
     };
 }
 
-pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-    try writer.print("window#{d}", .{self.handle.getId()});
-}
-
 pub fn manage(self: *Self) void {
     if (self.new) {
-        self.handle.useSsd();
+        self.river_window.useSsd();
         self.new = false;
     }
 
     if (self.dirty) {
-        defer util.log.debug("{f} has updated state.", .{self});
+        defer log.debug("{f} has updated state.", .{self});
 
         self.focused = false;
         var seat_iterator = self.window_manager.seats.iterator(.forward);
         while (seat_iterator.next()) |seat| {
             if (seat.window == self) {
-                seat.handle.focusWindow(self.handle);
+                seat.river_seat.focusWindow(self.river_window);
                 self.focused = true;
             }
         }
         if (self.focused) {
-            self.handle.setBorders(
+            self.river_window.setBorders(
                 .{ .top = true, .bottom = true, .left = true, .right = true },
                 config.border_width,
                 config.border_focused.r,
@@ -124,7 +106,7 @@ pub fn manage(self: *Self) void {
                 config.border_focused.a,
             );
         } else {
-            self.handle.setBorders(
+            self.river_window.setBorders(
                 .{ .top = true, .bottom = true, .left = true, .right = true },
                 config.border_width,
                 config.border_normal.r,
@@ -134,10 +116,10 @@ pub fn manage(self: *Self) void {
             );
         }
         if (self.focused or self.sticky) {
-            self.handle.show();
+            self.river_window.show();
             self.visible = true;
         } else {
-            self.handle.hide();
+            self.river_window.hide();
             self.visible = false;
         }
 
@@ -190,5 +172,36 @@ pub fn swap(self: *Self, another: *Self) void {
 }
 
 pub fn close(self: *Self) void {
-    self.handle.close();
+    self.river_window.close();
+}
+
+fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: *Self) void {
+    log.debug("{f} received {s} event.", .{ self, @tagName(event) });
+    switch (event) {
+        .closed => {
+            self.destroy();
+        },
+        .dimensions,
+        .dimensions_hint,
+        .app_id,
+        .title,
+        .parent,
+        .decoration_hint,
+        .pointer_move_requested,
+        .pointer_resize_requested,
+        .show_window_menu_requested,
+        .maximize_requested,
+        .unmaximize_requested,
+        .fullscreen_requested,
+        .exit_fullscreen_requested,
+        .minimize_requested,
+        .unreliable_pid,
+        => {
+            log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
+        },
+    }
+}
+
+pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+    try writer.print("window#{d}", .{self.river_window.getId()});
 }

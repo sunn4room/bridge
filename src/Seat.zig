@@ -5,95 +5,83 @@ const river = wayland.client.river;
 
 const config = @import("config.zig");
 const util = @import("util.zig");
+const log = util.log;
 const Binding = util.Binding;
 const Action = util.Action;
 const WindowManager = @import("WindowManager.zig");
-const XkbBindingManager = @import("XkbBindingManager.zig");
 const XkbBinding = @import("XkbBinding.zig");
 const PointerBinding = @import("PointerBinding.zig");
 const Window = @import("Window.zig");
 
 const Self = @This();
 
-handle: *river.SeatV1,
 window_manager: *WindowManager,
+river_seat: *river.SeatV1,
 link: wl.list.Link = undefined,
-new: bool = true,
 xkb_bindings: wl.list.Head(XkbBinding, .link) = undefined,
 pointer_bindings: wl.list.Head(PointerBinding, .link) = undefined,
-action: Action = .nop,
+new: bool = true,
 enabled: bool = false,
+action: ?Action = null,
 window: ?*Window = null,
 
-fn river_seat_listener(
-    _: *river.SeatV1,
-    event: river.SeatV1.Event,
-    self: *Self,
-) void {
-    util.log.debug("{f} received {s} event.", .{ self, @tagName(event) });
-    switch (event) {
-        .removed => {
-            self.destroy();
-        },
-        else => {
-            util.log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
-        },
-    }
-}
-
-pub fn inject(handle: *river.SeatV1, window_manager: *WindowManager) void {
-    const seat = std.heap.c_allocator.create(Self) catch unreachable;
-    seat.* = .{
-        .handle = handle,
+pub fn bind(window_manager: *WindowManager, river_seat: *river.SeatV1) void {
+    const self = std.heap.c_allocator.create(Self) catch unreachable;
+    river_seat.setListener(*Self, river_seat_listener, self);
+    self.* = .{
         .window_manager = window_manager,
+        .river_seat = river_seat,
     };
-    handle.setListener(*Self, river_seat_listener, seat);
-    seat.xkb_bindings.init();
-    seat.pointer_bindings.init();
+    self.link.init();
+    window_manager.seats.append(self);
+    self.xkb_bindings.init();
+    self.pointer_bindings.init();
     for (config.bindings) |binding| {
         switch (binding.trigger) {
             .keysym => |keysym| {
-                const xkb_binding_manager = window_manager.bridge.xkb_binding_manager.?;
-                const xkb_binding_handle = xkb_binding_manager.handle.getXkbBinding(seat.handle, @intFromEnum(keysym), binding.modifiers) catch unreachable;
-                XkbBinding.inject(xkb_binding_handle, binding.action, seat);
+                const river_xkb_binding = window_manager.river_xkb_bindings.getXkbBinding(river_seat, @intFromEnum(keysym), binding.modifiers) catch unreachable;
+                XkbBinding.bind(self, river_xkb_binding, binding.action);
             },
             .button => |button| {
-                const pointer_binding_handle = seat.handle.getPointerBinding(@intFromEnum(button), binding.modifiers) catch unreachable;
-                PointerBinding.inject(pointer_binding_handle, binding.action, seat);
+                const river_pointer_binding = river_seat.getPointerBinding(@intFromEnum(button), binding.modifiers) catch unreachable;
+                PointerBinding.bind(self, river_pointer_binding, binding.action);
             },
         }
     }
-    seat.focus(window_manager.windows.last());
-    window_manager.seats.append(seat);
-    util.log.debug("{f} has been created.", .{seat});
+    self.focus(window_manager.windows.last());
+    log.debug("{f} has been created.", .{self});
 }
 
 pub fn destroy(self: *Self) void {
-    util.log.debug("{f} is about to be destroyed.", .{self});
+    log.debug("{f} is about to be destroyed.", .{self});
+    self.focus(null);
     var xkb_binding_iterator = self.xkb_bindings.iterator(.forward);
     while (xkb_binding_iterator.next()) |xkb_binding| xkb_binding.destroy();
     var pointer_binding_iterator = self.pointer_bindings.iterator(.forward);
     while (pointer_binding_iterator.next()) |pointer_binding| pointer_binding.destroy();
-    self.focus(null);
     self.link.remove();
-    self.handle.destroy();
+    self.river_seat.destroy();
     std.heap.c_allocator.destroy(self);
 }
 
-pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
-    var link: *wl.list.Link = &self.link;
-    return while (true) {
-        link = switch (dir) {
-            .forward => link.next.?,
-            .reverse => link.prev.?,
-        };
-        if (link == &self.window_manager.seats.link) continue;
-        break @fieldParentPtr("link", link);
-    };
-}
-
-pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
-    try writer.print("seat#{d}", .{self.handle.getId()});
+fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self) void {
+    log.debug("{f} received {s} event.", .{ self, @tagName(event) });
+    switch (event) {
+        .removed => {
+            self.destroy();
+        },
+        .wl_seat,
+        .pointer_enter,
+        .pointer_leave,
+        .window_interaction,
+        .shell_surface_interaction,
+        .op_delta,
+        .op_release,
+        .pointer_position,
+        => {
+            log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
+        },
+    }
 }
 
 pub fn manage(self: *Self) void {
@@ -102,129 +90,130 @@ pub fn manage(self: *Self) void {
         self.new = false;
     }
 
-    switch (self.action) {
-        .nop => {},
-        .toggle_passthrough => {
-            if (self.enabled) self.disable() else self.enable();
-        },
-        .spawn => |cmd| {
-            util.spawn(cmd);
-        },
-        .change_window_weight => |step| {
-            if (self.window) |window| window.changeWeight(step);
-        },
-        .toggle_window_sticky => |force| {
-            if (self.window) |window| {
-                if (window.output) |output| {
-                    if (window.sticky) {
+    if (self.action) |action| {
+        switch (action) {
+            .toggle_passthrough => {
+                if (self.enabled) self.disable() else self.enable();
+            },
+            .spawn => |cmd| {
+                util.spawn(cmd);
+            },
+            .change_window_weight => |step| {
+                if (self.window) |window| window.changeWeight(step);
+            },
+            .toggle_window_sticky => |force| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        if (window.sticky) {
+                            var window_iterator = self.window_manager.windows.iterator(.forward);
+                            while (window_iterator.next()) |each_window| {
+                                if (each_window.output == output) {
+                                    if (force or each_window == window or !each_window.lock) {
+                                        each_window.setSticky(false);
+                                        each_window.lock = false;
+                                    }
+                                }
+                            }
+                        } else {
+                            window.setSticky(true);
+                            window.lock = force;
+                        }
+                    }
+                }
+            },
+            .focus_window => |index| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        var counter: i32 = 0;
                         var window_iterator = self.window_manager.windows.iterator(.forward);
                         while (window_iterator.next()) |each_window| {
                             if (each_window.output == output) {
-                                if (force or each_window == window or !each_window.lock) {
-                                    each_window.setSticky(false);
-                                    each_window.lock = false;
+                                counter += 1;
+                                if (counter == index) {
+                                    self.focus(each_window);
+                                    break;
                                 }
                             }
                         }
-                    } else {
-                        window.setSticky(true);
-                        window.lock = force;
                     }
                 }
-            }
-        },
-        .focus_window => |index| {
-            if (self.window) |window| {
-                if (window.output) |output| {
-                    var counter: i32 = 0;
-                    var window_iterator = self.window_manager.windows.iterator(.forward);
-                    while (window_iterator.next()) |each_window| {
-                        if (each_window.output == output) {
-                            counter += 1;
-                            if (counter == index) {
+            },
+            .iterate_window => |dir| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        var each_window = window.iterate(dir);
+                        while (each_window != window) : (each_window = each_window.iterate(dir)) {
+                            if (each_window.output == output) {
                                 self.focus(each_window);
                                 break;
                             }
                         }
                     }
                 }
-            }
-        },
-        .iterate_window => |dir| {
-            if (self.window) |window| {
-                if (window.output) |output| {
-                    var each_window = window.iterate(dir);
-                    while (each_window != window) : (each_window = each_window.iterate(dir)) {
-                        if (each_window.output == output) {
-                            self.focus(each_window);
-                            break;
-                        }
-                    }
-                }
-            }
-        },
-        .iterate_output => |dir| {
-            if (self.window) |window| {
-                if (window.output) |output| {
-                    var each_output = output.iterate(dir);
-                    each_output: while (each_output != output) : (each_output = each_output.iterate(dir)) {
-                        var window_iterator = self.window_manager.windows.iterator(.forward);
-                        while (window_iterator.next()) |each_window| {
-                            if (each_window.output == each_output) {
-                                self.focus(each_window);
-                                break :each_output;
+            },
+            .iterate_output => |dir| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        var each_output = output.iterate(dir);
+                        each_output: while (each_output != output) : (each_output = each_output.iterate(dir)) {
+                            var window_iterator = self.window_manager.windows.iterator(.forward);
+                            while (window_iterator.next()) |each_window| {
+                                if (each_window.output == each_output) {
+                                    self.focus(each_window);
+                                    break :each_output;
+                                }
                             }
                         }
                     }
                 }
-            }
-        },
-        .swap_window => |dir| {
-            if (self.window) |window| {
-                if (window.output) |output| {
-                    var each_window = window.iterate(dir);
-                    while (each_window != window) : (each_window = each_window.iterate(dir)) {
-                        if (each_window.output == output) {
-                            window.swap(each_window);
-                            break;
+            },
+            .swap_window => |dir| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        var each_window = window.iterate(dir);
+                        while (each_window != window) : (each_window = each_window.iterate(dir)) {
+                            if (each_window.output == output) {
+                                window.swap(each_window);
+                                break;
+                            }
                         }
                     }
                 }
-            }
-        },
-        .send_window => |dir| {
-            if (self.window) |window| {
-                if (window.output) |output| {
-                    window.send(output.iterate(dir));
+            },
+            .send_window => |dir| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        window.send(output.iterate(dir));
+                    }
                 }
-            }
-        },
-        .close_window => {
-            if (self.window) |window| window.close();
-        },
-        .quit => {
-            self.window_manager.bridge.running = false;
-        },
+            },
+            .close_window => {
+                if (self.window) |window| window.close();
+            },
+            .quit => {
+                self.window_manager.running = false;
+            },
+        }
+        self.action = null;
     }
-    self.action = .nop;
 }
 
 pub fn enable(self: *Self) void {
     var xkb_binding_iterator = self.xkb_bindings.iterator(.forward);
-    while (xkb_binding_iterator.next()) |xkb_binding| xkb_binding.handle.enable();
+    while (xkb_binding_iterator.next()) |xkb_binding| xkb_binding.river_xkb_binding.enable();
     var pointer_binding_iterator = self.pointer_bindings.iterator(.forward);
-    while (pointer_binding_iterator.next()) |pointer_binding| pointer_binding.handle.enable();
+    while (pointer_binding_iterator.next()) |pointer_binding| pointer_binding.river_pointer_binding.enable();
     self.enabled = true;
-    util.log.debug("{f} has been enabled.", .{self});
+    log.debug("{f} has been enabled.", .{self});
 }
 
 pub fn disable(self: *Self) void {
     var xkb_binding_iterator = self.xkb_bindings.iterator(.forward);
-    while (xkb_binding_iterator.next()) |xkb_binding| if (xkb_binding.action != .toggle_passthrough) xkb_binding.handle.disable();
+    while (xkb_binding_iterator.next()) |xkb_binding| if (xkb_binding.action != .toggle_passthrough) xkb_binding.river_xkb_binding.disable();
     var pointer_binding_iterator = self.pointer_bindings.iterator(.forward);
-    while (pointer_binding_iterator.next()) |pointer_binding| if (pointer_binding.action != .toggle_passthrough) pointer_binding.handle.disable();
+    while (pointer_binding_iterator.next()) |pointer_binding| if (pointer_binding.action != .toggle_passthrough) pointer_binding.river_pointer_binding.disable();
     self.enabled = false;
-    util.log.debug("{f} has been disabled.", .{self});
+    log.debug("{f} has been disabled.", .{self});
 }
 
 pub fn focus(self: *Self, window: ?*Window) void {
@@ -242,4 +231,8 @@ pub fn focus(self: *Self, window: ?*Window) void {
             if (new_window.output) |output| output.dirty = true;
         }
     }
+}
+
+pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+    try writer.print("seat#{d}", .{self.river_seat.getId()});
 }
