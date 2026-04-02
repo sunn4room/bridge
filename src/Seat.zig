@@ -101,22 +101,18 @@ pub fn manage(self: *Self) void {
             .change_window_weight => |step| {
                 if (self.window) |window| window.changeWeight(step);
             },
-            .toggle_window_sticky => |force| {
+            .toggle_window_sticky => {
                 if (self.window) |window| {
                     if (window.output) |output| {
                         if (window.sticky) {
                             var window_iterator = self.window_manager.windows.iterator(.forward);
                             while (window_iterator.next()) |each_window| {
                                 if (each_window.output == output) {
-                                    if (force or each_window == window or !each_window.lock) {
-                                        each_window.setSticky(false);
-                                        each_window.lock = false;
-                                    }
+                                    each_window.setSticky(false);
                                 }
                             }
                         } else {
                             window.setSticky(true);
-                            window.lock = force;
                         }
                     }
                 }

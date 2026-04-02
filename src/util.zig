@@ -38,7 +38,7 @@ pub const Action = union(enum) {
     toggle_passthrough,
     spawn: []const []const u8,
     change_window_weight: i32,
-    toggle_window_sticky: bool,
+    toggle_window_sticky,
     focus_window: i32,
     iterate_window: wl.list.Direction,
     iterate_output: wl.list.Direction,

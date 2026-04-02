@@ -47,12 +47,7 @@ pub const bindings = [_]Binding{
     .{
         .modifiers = .{ .mod1 = true },
         .trigger = .{ .keysym = .s },
-        .action = .{ .toggle_window_sticky = false },
-    },
-    .{
-        .modifiers = .{ .mod1 = true, .shift = true },
-        .trigger = .{ .keysym = .s },
-        .action = .{ .toggle_window_sticky = true },
+        .action = .toggle_window_sticky,
     },
     .{
         .modifiers = .{ .mod1 = true },

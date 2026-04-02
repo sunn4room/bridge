@@ -22,7 +22,6 @@ visible: bool = false,
 output: ?*Output = null,
 weight: i32 = 5,
 sticky: bool = false,
-lock: bool = false,
 
 pub fn bind(window_manager: *WindowManager, river_window: *river.WindowV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
