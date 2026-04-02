@@ -1,5 +1,4 @@
 const std = @import("std");
-
 const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const river = wayland.client.river;
@@ -53,6 +52,13 @@ pub const Binding = struct {
     modifiers: Modifiers,
     trigger: Trigger,
     action: Action,
+};
+
+pub const Rect = struct {
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
 };
 
 pub fn spawn(cmd: []const []const u8) void {

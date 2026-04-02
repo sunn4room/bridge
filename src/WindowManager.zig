@@ -189,6 +189,6 @@ fn river_window_manager_listener(_: *river.WindowManagerV1, event: river.WindowM
     }
 }
 
-pub fn format(_: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+pub fn format(_: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
     try writer.print("window_manager", .{});
 }

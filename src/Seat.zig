@@ -36,7 +36,7 @@ pub fn bind(window_manager: *WindowManager, river_seat: *river.SeatV1) void {
     window_manager.seats.append(self);
     self.xkb_bindings.init();
     self.pointer_bindings.init();
-    for (config.bindings) |binding| {
+    for (&config.bindings) |*binding| {
         switch (binding.trigger) {
             .keysym => |keysym| {
                 const river_xkb_binding = window_manager.river_xkb_bindings.getXkbBinding(river_seat, @intFromEnum(keysym), binding.modifiers) catch unreachable;

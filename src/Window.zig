@@ -13,7 +13,7 @@ const Self = @This();
 
 window_manager: *WindowManager,
 river_window: *river.WindowV1,
-node: *river.NodeV1,
+river_node: *river.NodeV1,
 link: wl.list.Link = undefined,
 new: bool = true,
 dirty: bool = false,
@@ -30,7 +30,7 @@ pub fn bind(window_manager: *WindowManager, river_window: *river.WindowV1) void 
     self.* = .{
         .window_manager = window_manager,
         .river_window = river_window,
-        .node = river_window.getNode() catch unreachable,
+        .river_node = river_window.getNode() catch unreachable,
     };
     self.link.init();
     window_manager.windows.append(self);
@@ -62,9 +62,36 @@ pub fn destroy(self: *Self) void {
     if (fallback == null) fallback = self.window_manager.windows.last();
     var seat_iterator = self.window_manager.seats.iterator(.forward);
     while (seat_iterator.next()) |seat| if (seat.window == self) seat.focus(fallback);
-    self.node.destroy();
+    self.river_node.destroy();
     self.river_window.destroy();
     std.heap.c_allocator.destroy(self);
+}
+
+fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: *Self) void {
+    log.debug("{f} received {s} event.", .{ self, @tagName(event) });
+    switch (event) {
+        .closed => {
+            self.destroy();
+        },
+        .dimensions,
+        .dimensions_hint,
+        .title,
+        .app_id,
+        .parent,
+        .decoration_hint,
+        .pointer_move_requested,
+        .pointer_resize_requested,
+        .show_window_menu_requested,
+        .maximize_requested,
+        .unmaximize_requested,
+        .fullscreen_requested,
+        .exit_fullscreen_requested,
+        .minimize_requested,
+        .unreliable_pid,
+        => {
+            log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
+        },
+    }
 }
 
 pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
@@ -175,33 +202,6 @@ pub fn close(self: *Self) void {
     self.river_window.close();
 }
 
-fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: *Self) void {
-    log.debug("{f} received {s} event.", .{ self, @tagName(event) });
-    switch (event) {
-        .closed => {
-            self.destroy();
-        },
-        .dimensions,
-        .dimensions_hint,
-        .app_id,
-        .title,
-        .parent,
-        .decoration_hint,
-        .pointer_move_requested,
-        .pointer_resize_requested,
-        .show_window_menu_requested,
-        .maximize_requested,
-        .unmaximize_requested,
-        .fullscreen_requested,
-        .exit_fullscreen_requested,
-        .minimize_requested,
-        .unreliable_pid,
-        => {
-            log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
-        },
-    }
-}
-
-pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
     try writer.print("window#{d}", .{self.river_window.getId()});
 }

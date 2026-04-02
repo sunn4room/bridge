@@ -6,6 +6,7 @@ const river = wayland.client.river;
 const config = @import("config.zig");
 const util = @import("util.zig");
 const log = util.log;
+const Rect = util.Rect;
 const WindowManager = @import("WindowManager.zig");
 const Window = @import("Window.zig");
 
@@ -16,10 +17,7 @@ river_output: *river.OutputV1,
 river_layer_shell_output: *river.LayerShellOutputV1,
 link: wl.list.Link = undefined,
 dirty: bool = false,
-x: ?i32 = null,
-y: ?i32 = null,
-width: ?i32 = null,
-height: ?i32 = null,
+area: ?Rect = undefined,
 
 pub fn bind(window_manager: *WindowManager, river_output: *river.OutputV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
@@ -68,10 +66,12 @@ fn river_layer_shell_output_listener(_: *river.LayerShellOutputV1, event: river.
     log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .non_exclusive_area => |area| {
-            self.x = area.x;
-            self.y = area.y;
-            self.width = area.width;
-            self.height = area.height;
+            self.area = .{
+                .x = area.x,
+                .y = area.y,
+                .w = area.width,
+                .h = area.height,
+            };
             self.dirty = true;
         },
     }
@@ -90,7 +90,7 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
 }
 
 pub fn manage(self: *Self) void {
-    if (self.x == null or self.y == null or self.width == null or self.height == null) return;
+    if (self.area == null) return;
 
     if (self.dirty) {
         defer log.debug("{f} has updated state.", .{self});
@@ -109,17 +109,17 @@ fn layout(self: *Self, original_link: *wl.list.Link, occupied: i32) i32 {
             const needed: i32 = self.layout(&each_window.link, occupied + weight);
             const total: i32 = occupied + weight + needed;
             const gap: i32 = config.layout_gap;
-            const total_width: i32 = self.width.? - gap;
+            const total_width: i32 = self.area.?.w - gap;
             const occupied_width: i32 = @divFloor(occupied * total_width, total);
             const weight_width: i32 = @divFloor(weight * total_width, total);
-            each_window.node.setPosition(gap + occupied_width + config.border_width, gap + config.border_width);
-            each_window.river_window.proposeDimensions(weight_width - gap - 2 * config.border_width, self.height.? - 2 * gap - 2 * config.border_width);
+            each_window.river_node.setPosition(gap + occupied_width + config.border_width, gap + config.border_width);
+            each_window.river_window.proposeDimensions(weight_width - gap - 2 * config.border_width, self.area.?.h - 2 * gap - 2 * config.border_width);
             return weight + needed;
         }
     }
     return 0;
 }
 
-pub fn format(self: Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
+pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
     try writer.print("output#{d}", .{self.river_output.getId()});
 }
