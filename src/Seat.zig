@@ -6,6 +6,8 @@ const river = wayland.client.river;
 const config = @import("config.zig");
 const util = @import("util.zig");
 const log = util.log;
+const Rect = util.Rect;
+const hit = util.hit;
 const Binding = util.Binding;
 const Action = util.Action;
 const WindowManager = @import("WindowManager.zig");
@@ -24,6 +26,8 @@ new: bool = true,
 enabled: bool = false,
 action: ?Action = null,
 window: ?*Window = null,
+x: i32 = undefined,
+y: i32 = undefined,
 
 pub fn bind(window_manager: *WindowManager, river_seat: *river.SeatV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
@@ -78,14 +82,34 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
         .removed => {
             self.destroy();
         },
+        .pointer_position => |position| {
+            self.x = position.x;
+            self.y = position.y;
+        },
+        .shell_surface_interaction => {
+            var window_iterator = self.window_manager.windows.iterator(.forward);
+            while (window_iterator.next()) |window| {
+                if (hit(self.x, self.y, window.buttons[0]) or hit(self.x, self.y, window.buttons[0])) {
+                    self.focus(window);
+                    return;
+                }
+            }
+            var output_iterator = self.window_manager.outputs.iterator(.forward);
+            while (output_iterator.next()) |output| {
+                for (output.buttons, 1..) |button, index| {
+                    if (hit(self.x, self.y, button)) {
+                        output.setView(@intCast(index));
+                        return;
+                    }
+                }
+            }
+        },
         .wl_seat,
         .pointer_enter,
         .pointer_leave,
         .window_interaction,
-        .shell_surface_interaction,
         .op_delta,
         .op_release,
-        .pointer_position,
         => {
             log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
         },
@@ -251,7 +275,7 @@ pub fn manage(self: *Self) void {
                 }
             },
             .set_window_weight => |weight| {
-                if (self.window) |window| window.setWeight(weight);
+                if (self.window) |window| window.setWeight(@intCast(weight));
             },
             .set_output_view => |view| {
                 if (self.window) |window| {
@@ -273,8 +297,9 @@ pub fn focus(self: *Self, window: ?*Window) void {
     if (self.window == window) return;
     if (self.window) |old_window| {
         old_window.dirty = true;
-        if (!old_window.sticky) {
-            if (old_window.output) |output| output.dirty = true;
+        if (old_window.output) |output| {
+            output.bar.dirty = true;
+            if (!old_window.sticky) output.dirty = true;
         }
     }
     self.window = window;
@@ -282,8 +307,9 @@ pub fn focus(self: *Self, window: ?*Window) void {
         if (!new_window.focused) {
             new_window.dirty = true;
         }
-        if (!new_window.visible) {
-            if (new_window.output) |output| output.dirty = true;
+        if (new_window.output) |output| {
+            if (!new_window.focused) output.bar.dirty = true;
+            if (!new_window.visible) output.dirty = true;
         }
     }
 }

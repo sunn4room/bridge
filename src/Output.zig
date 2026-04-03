@@ -9,6 +9,7 @@ const log = util.log;
 const Rect = util.Rect;
 const WindowManager = @import("WindowManager.zig");
 const Window = @import("Window.zig");
+const Bar = @import("Bar.zig");
 
 const Self = @This();
 
@@ -17,8 +18,10 @@ river_output: *river.OutputV1,
 river_layer_shell_output: *river.LayerShellOutputV1,
 link: wl.list.Link = undefined,
 dirty: bool = false,
-area: ?Rect = undefined,
+area: ?Rect = null,
 view: u4 = 1,
+bar: *Bar = undefined,
+buttons: [10]?Rect = .{null} ** 10,
 
 pub fn bind(window_manager: *WindowManager, river_output: *river.OutputV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
@@ -39,11 +42,15 @@ pub fn bind(window_manager: *WindowManager, river_output: *river.OutputV1) void 
     var window_iterator = window_manager.windows.iterator(.forward);
     while (window_iterator.next()) |window| if (window.output == null) window.send(self);
 
+    Bar.bind(self);
+
     log.debug("{f} has been created.", .{self});
 }
 
 pub fn destroy(self: *Self) void {
     log.debug("{f} is about to be destroyed.", .{self});
+
+    self.bar.destroy();
 
     self.link.remove();
 
@@ -91,10 +98,11 @@ fn river_layer_shell_output_listener(_: *river.LayerShellOutputV1, event: river.
             self.area = .{
                 .x = area.x,
                 .y = area.y,
-                .w = area.width,
-                .h = area.height,
+                .w = @intCast(area.width),
+                .h = @intCast(area.height),
             };
             self.dirty = true;
+            self.bar.dirty = true;
         },
     }
 }
@@ -113,6 +121,8 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
 
 pub fn manage(self: *Self) void {
     if (self.area == null) return;
+
+    self.bar.manage();
 
     if (self.dirty) {
         defer log.debug("{f} has updated state.", .{self});
@@ -136,6 +146,7 @@ pub fn setView(self: *Self, view: u4) void {
     self.view = new_view;
 
     self.dirty = true;
+    self.bar.dirty = true;
     var window_iterator = self.window_manager.windows.iterator(.forward);
     while (window_iterator.next()) |window| {
         if (window.output == self) window.dirty = true;
@@ -156,9 +167,9 @@ fn layout(self: *Self, original_window: *Window, occupied: i32) i32 {
     const occupied_width: i32 = @divFloor(occupied * total_width, total);
     const weight_width: i32 = @divFloor(weight * total_width, total);
     const x: i32 = gap + occupied_width + config.border_width;
-    const y: i32 = gap + config.border_width;
+    const y: i32 = self.window_manager.bar_height + gap + config.border_width;
     const w: i32 = weight_width - gap - 2 * config.border_width;
-    const h: i32 = self.area.?.h - 2 * gap - 2 * config.border_width;
+    const h: i32 = self.area.?.h - self.window_manager.bar_height - 2 * gap - 2 * config.border_width;
     window.river_node.setPosition(x, y);
     window.river_window.proposeDimensions(w, h);
     return weight + needed;

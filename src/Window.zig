@@ -6,6 +6,7 @@ const river = wayland.client.river;
 const config = @import("config.zig");
 const util = @import("util.zig");
 const log = util.log;
+const Rect = util.Rect;
 const WindowManager = @import("WindowManager.zig");
 const Output = @import("Output.zig");
 
@@ -16,13 +17,15 @@ river_window: *river.WindowV1,
 river_node: *river.NodeV1,
 link: wl.list.Link = undefined,
 new: bool = true,
+icon: [*:0]const u8 = config.app_icon_fallback,
 dirty: bool = false,
-weight: i32 = 5,
+weight: u4 = 5,
 focused: bool = false,
 visible: bool = false,
 sticky: bool = false,
 output: ?*Output = null,
 views: u10 = 0,
+buttons: [2]?Rect = .{null} ** 2,
 
 pub fn bind(window_manager: *WindowManager, river_window: *river.WindowV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
@@ -53,8 +56,6 @@ pub fn bind(window_manager: *WindowManager, river_window: *river.WindowV1) void 
 pub fn destroy(self: *Self) void {
     log.debug("{f} is about to be destroyed.", .{self});
 
-    self.send(null);
-
     var fallback: ?*Self = null;
     if (self.output) |output| {
         var each_window = self.iterate(.reverse);
@@ -67,6 +68,7 @@ pub fn destroy(self: *Self) void {
     }
 
     self.link.remove();
+    self.send(null);
 
     if (fallback == null) fallback = self.window_manager.windows.last();
     var seat_iterator = self.window_manager.seats.iterator(.forward);
@@ -83,10 +85,12 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
         .closed => {
             self.destroy();
         },
+        .app_id => |app| {
+            self.setIcon(app.app_id);
+        },
         .dimensions,
         .dimensions_hint,
         .title,
-        .app_id,
         .parent,
         .decoration_hint,
         .pointer_move_requested,
@@ -168,7 +172,7 @@ pub fn manage(self: *Self) void {
     }
 }
 
-pub fn setWeight(self: *Self, weight: i32) void {
+pub fn setWeight(self: *Self, weight: u4) void {
     var new_weight = weight;
     if (new_weight < 1) {
         new_weight = 1;
@@ -177,8 +181,9 @@ pub fn setWeight(self: *Self, weight: i32) void {
     }
     if (new_weight == self.weight) return;
     self.weight = new_weight;
-    if (self.visible) {
-        if (self.output) |output| output.dirty = true;
+    if (self.output) |output| {
+        output.bar.dirty = true;
+        if (self.visible) output.dirty = true;
     }
 }
 
@@ -187,30 +192,45 @@ pub fn setSticky(self: *Self, sticky: bool) void {
     if (self.output) |output| {
         self.views ^= @as(u10, 1) << (output.view - 1);
         self.dirty = true;
+        output.bar.dirty = true;
         if (!self.focused) output.dirty = true;
     }
 }
 
 pub fn send(self: *Self, output: ?*Output) void {
     if (self.output == output) return;
-    if (self.visible) {
-        if (self.output) |old_output| old_output.dirty = true;
+    if (self.output) |old_output| {
+        old_output.bar.dirty = true;
+        if (self.visible) old_output.dirty = true;
     }
     self.output = output;
-    if (self.visible) {
-        if (self.output) |new_output| new_output.dirty = true;
+    if (self.output) |new_output| {
+        new_output.bar.dirty = true;
+        if (self.visible) new_output.dirty = true;
     }
 }
 
 pub fn swap(self: *Self, another: *Self) void {
     if (self == another) return;
+    if (self.output != another.output) return;
     self.link.swapWith(&another.link);
-    if (self.visible) {
-        if (self.output) |output| output.dirty = true;
+    if (self.output) |output| {
+        output.bar.dirty = true;
+        if (self.visible or another.visible) output.dirty = true;
     }
-    if (another.visible) {
-        if (another.output) |output| output.dirty = true;
+}
+
+fn setIcon(self: *Self, id: ?[*:0]const u8) void {
+    self.icon = config.app_icon_fallback;
+    if (id) |app_id| {
+        for (&config.app_icons) |*app_icon| {
+            if (std.mem.orderZ(u8, app_icon.id, app_id) == .eq) {
+                self.icon = app_icon.icon;
+                break;
+            }
+        }
     }
+    if (self.output) |output| output.bar.dirty = true;
 }
 
 pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {

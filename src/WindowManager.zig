@@ -3,6 +3,7 @@ const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const wp = wayland.client.wp;
 const river = wayland.client.river;
+const fcft = @import("fcft");
 
 const config = @import("config.zig");
 const util = @import("util.zig");
@@ -31,9 +32,13 @@ river_layer_shell_name: ?u32 = null,
 seats: wl.list.Head(Seat, .link) = undefined,
 windows: wl.list.Head(Window, .link) = undefined,
 outputs: wl.list.Head(Output, .link) = undefined,
+bar_height: u31 = undefined,
 running: bool = false,
 
 pub fn create(wl_display: *wl.Display) *Self {
+    if (!fcft.init(.auto, false, .warning)) unreachable;
+    if (fcft.capabilities() & fcft.Capabilities.text_run_shaping == 0) unreachable;
+
     const wl_registry = wl_display.getRegistry() catch unreachable;
     const self = std.heap.c_allocator.create(Self) catch unreachable;
     wl_registry.setListener(*Self, wl_registry_listener, self);
@@ -43,6 +48,9 @@ pub fn create(wl_display: *wl.Display) *Self {
     self.seats.init();
     self.windows.init();
     self.outputs.init();
+    const basic_font = util.getFont(120);
+    self.bar_height = @intCast(basic_font.height);
+    basic_font.destroy();
 
     if (wl_display.roundtrip() != .SUCCESS) unreachable;
     self.startup();
@@ -92,6 +100,9 @@ pub fn destroy(self: *Self) void {
     if (self.wl_compositor_name != null) self.wl_compositor.destroy();
 
     self.wl_registry.destroy();
+
+    fcft.fini();
+
     std.heap.c_allocator.destroy(self);
 }
 
