@@ -21,6 +21,7 @@ focused: bool = false,
 visible: bool = false,
 output: ?*Output = null,
 weight: i32 = 5,
+view: u10 = 0,
 sticky: bool = false,
 
 pub fn bind(window_manager: *WindowManager, river_window: *river.WindowV1) void {
@@ -108,6 +109,7 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
 pub fn manage(self: *Self) void {
     if (self.new) {
         self.river_window.useSsd();
+        self.river_window.setTiled(.{ .top = true, .bottom = true, .left = true, .right = true });
         self.new = false;
     }
 
@@ -122,25 +124,28 @@ pub fn manage(self: *Self) void {
                 self.focused = true;
             }
         }
-        if (self.focused) {
-            self.river_window.setBorders(
-                .{ .top = true, .bottom = true, .left = true, .right = true },
-                config.border_width,
-                config.border_focused.r,
-                config.border_focused.g,
-                config.border_focused.b,
-                config.border_focused.a,
-            );
-        } else {
-            self.river_window.setBorders(
-                .{ .top = true, .bottom = true, .left = true, .right = true },
-                config.border_width,
-                config.border_normal.r,
-                config.border_normal.g,
-                config.border_normal.b,
-                config.border_normal.a,
-            );
+
+        self.sticky = false;
+        if (self.output) |output| {
+            if (self.view & (@as(u10, 1) << (output.view - 1)) != 0) {
+                self.sticky = true;
+            }
         }
+
+        var color = config.border_normal;
+        if (self.focused) {
+            color = config.border_focused;
+            if (self.sticky) color = config.border_sticky;
+        }
+        self.river_window.setBorders(
+            .{ .top = true, .bottom = true, .left = true, .right = true },
+            config.border_width,
+            color.r,
+            color.g,
+            color.b,
+            color.a,
+        );
+
         if (self.focused or self.sticky) {
             self.river_window.show();
             self.visible = true;
@@ -153,25 +158,26 @@ pub fn manage(self: *Self) void {
     }
 }
 
-pub fn changeWeight(self: *Self, step: i32) void {
-    const old_weight = self.weight;
-    self.weight += step;
-    if (self.weight < 1) {
-        self.weight = 1;
-    } else if (self.weight > 10) {
-        self.weight = 10;
+pub fn setWeight(self: *Self, weight: i32) void {
+    var new_weight = weight;
+    if (new_weight < 1) {
+        new_weight = 1;
+    } else if (new_weight > 10) {
+        new_weight = 10;
     }
-    if (self.weight != old_weight and self.visible) {
+    if (new_weight == self.weight) return;
+    self.weight = new_weight;
+    if (self.visible) {
         if (self.output) |output| output.dirty = true;
     }
 }
 
 pub fn setSticky(self: *Self, sticky: bool) void {
     if (self.sticky == sticky) return;
-    self.sticky = sticky;
-    if (!self.focused) {
+    if (self.output) |output| {
+        self.view ^= @as(u10, 1) << (output.view - 1);
         self.dirty = true;
-        if (self.output) |output| output.dirty = true;
+        if (!self.focused) output.dirty = true;
     }
 }
 

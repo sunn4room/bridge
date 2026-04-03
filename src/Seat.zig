@@ -98,9 +98,6 @@ pub fn manage(self: *Self) void {
             .spawn => |cmd| {
                 util.spawn(cmd);
             },
-            .change_window_weight => |step| {
-                if (self.window) |window| window.changeWeight(step);
-            },
             .toggle_window_sticky => {
                 if (self.window) |window| {
                     if (window.output) |output| {
@@ -117,7 +114,89 @@ pub fn manage(self: *Self) void {
                     }
                 }
             },
-            .focus_window => |index| {
+            .iterate_window_weight => |dir| {
+                if (self.window) |window| {
+                    const weight = switch (dir) {
+                        .forward => window.weight + 1,
+                        .reverse => window.weight - 1,
+                    };
+                    window.setWeight(weight);
+                }
+            },
+            .iterate_window_focus => |dir| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        var each_window = window.iterate(dir);
+                        while (each_window != window) : (each_window = each_window.iterate(dir)) {
+                            if (each_window.output == output) {
+                                self.focus(each_window);
+                                break;
+                            }
+                        }
+                    }
+                }
+            },
+            .iterate_sticky_window_focus => |dir| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        var each_window = window.iterate(dir);
+                        while (each_window != window) : (each_window = each_window.iterate(dir)) {
+                            if (each_window.output == output and each_window.sticky) {
+                                self.focus(each_window);
+                                break;
+                            }
+                        }
+                    }
+                }
+            },
+            .iterate_window_order => |dir| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        var each_window = window.iterate(dir);
+                        while (each_window != window) : (each_window = each_window.iterate(dir)) {
+                            if (each_window.output == output) {
+                                window.swap(each_window);
+                                break;
+                            }
+                        }
+                    }
+                }
+            },
+            .iterate_output_view => |dir| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        const view = switch (dir) {
+                            .forward => output.view + 1,
+                            .reverse => output.view - 1,
+                        };
+                        output.setView(view);
+                    }
+                }
+            },
+            .iterate_output_focus => |dir| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        var each_output = output.iterate(dir);
+                        each_output: while (each_output != output) : (each_output = each_output.iterate(dir)) {
+                            var window_iterator = self.window_manager.windows.iterator(.forward);
+                            while (window_iterator.next()) |each_window| {
+                                if (each_window.output == each_output) {
+                                    self.focus(each_window);
+                                    break :each_output;
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            .iterate_window_output => |dir| {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        window.send(output.iterate(dir));
+                    }
+                }
+            },
+            .set_window_focus => |index| {
                 if (self.window) |window| {
                     if (window.output) |output| {
                         var counter: i32 = 0;
@@ -134,52 +213,13 @@ pub fn manage(self: *Self) void {
                     }
                 }
             },
-            .iterate_window => |dir| {
-                if (self.window) |window| {
-                    if (window.output) |output| {
-                        var each_window = window.iterate(dir);
-                        while (each_window != window) : (each_window = each_window.iterate(dir)) {
-                            if (each_window.output == output) {
-                                self.focus(each_window);
-                                break;
-                            }
-                        }
-                    }
-                }
+            .set_window_weight => |weight| {
+                if (self.window) |window| window.setWeight(weight);
             },
-            .iterate_output => |dir| {
+            .set_output_view => |view| {
                 if (self.window) |window| {
                     if (window.output) |output| {
-                        var each_output = output.iterate(dir);
-                        each_output: while (each_output != output) : (each_output = each_output.iterate(dir)) {
-                            var window_iterator = self.window_manager.windows.iterator(.forward);
-                            while (window_iterator.next()) |each_window| {
-                                if (each_window.output == each_output) {
-                                    self.focus(each_window);
-                                    break :each_output;
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            .swap_window => |dir| {
-                if (self.window) |window| {
-                    if (window.output) |output| {
-                        var each_window = window.iterate(dir);
-                        while (each_window != window) : (each_window = each_window.iterate(dir)) {
-                            if (each_window.output == output) {
-                                window.swap(each_window);
-                                break;
-                            }
-                        }
-                    }
-                }
-            },
-            .send_window => |dir| {
-                if (self.window) |window| {
-                    if (window.output) |output| {
-                        window.send(output.iterate(dir));
+                        output.setView(view);
                     }
                 }
             },

@@ -18,6 +18,7 @@ river_layer_shell_output: *river.LayerShellOutputV1,
 link: wl.list.Link = undefined,
 dirty: bool = false,
 area: ?Rect = undefined,
+view: u4 = 1,
 
 pub fn bind(window_manager: *WindowManager, river_output: *river.OutputV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
@@ -87,6 +88,24 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
         if (link == &self.window_manager.outputs.link) continue;
         break @fieldParentPtr("link", link);
     };
+}
+
+pub fn setView(self: *Self, view: u4) void {
+    var new_view = view;
+    if (new_view < 1) {
+        new_view = 1;
+    } else if (new_view > 10) {
+        new_view = 10;
+    }
+    if (new_view == self.view) return;
+    self.view = new_view;
+    self.dirty = true;
+    {
+        var window_iterator = self.window_manager.windows.iterator(.forward);
+        while (window_iterator.next()) |window| {
+            if (window.output == self) window.dirty = true;
+        }
+    }
 }
 
 pub fn manage(self: *Self) void {
