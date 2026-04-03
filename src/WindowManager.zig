@@ -35,7 +35,6 @@ running: bool = false,
 
 pub fn create(wl_display: *wl.Display) *Self {
     const wl_registry = wl_display.getRegistry() catch unreachable;
-
     const self = std.heap.c_allocator.create(Self) catch unreachable;
     wl_registry.setListener(*Self, wl_registry_listener, self);
     self.* = .{
@@ -46,13 +45,13 @@ pub fn create(wl_display: *wl.Display) *Self {
     self.outputs.init();
 
     if (wl_display.roundtrip() != .SUCCESS) unreachable;
-    self.run();
+    self.startup();
 
     log.info("{f} has started!", .{self});
     return self;
 }
 
-fn run(self: *Self) void {
+fn startup(self: *Self) void {
     if (self.wl_compositor_name == null) {
         log.err("Global object 'wl_compositor' is missing.", .{});
     } else if (self.wl_shm_name == null) {
@@ -91,6 +90,7 @@ pub fn destroy(self: *Self) void {
     if (self.wp_viewporter_name != null) self.wp_viewporter.destroy();
     if (self.wl_shm_name != null) self.wl_shm.destroy();
     if (self.wl_compositor_name != null) self.wl_compositor.destroy();
+
     self.wl_registry.destroy();
     std.heap.c_allocator.destroy(self);
 }

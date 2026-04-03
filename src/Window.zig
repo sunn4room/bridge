@@ -17,12 +17,12 @@ river_node: *river.NodeV1,
 link: wl.list.Link = undefined,
 new: bool = true,
 dirty: bool = false,
+weight: i32 = 5,
 focused: bool = false,
 visible: bool = false,
-output: ?*Output = null,
-weight: i32 = 5,
-view: u10 = 0,
 sticky: bool = false,
+output: ?*Output = null,
+views: u10 = 0,
 
 pub fn bind(window_manager: *WindowManager, river_window: *river.WindowV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
@@ -32,22 +32,29 @@ pub fn bind(window_manager: *WindowManager, river_window: *river.WindowV1) void 
         .river_window = river_window,
         .river_node = river_window.getNode() catch unreachable,
     };
-    self.link.init();
-    window_manager.windows.append(self);
+
     var output: ?*Output = null;
-    if (window_manager.windows.last()) |last_window| {
+    if (self.window_manager.windows.last()) |last_window| {
         if (last_window.output) |last_window_output| output = last_window_output;
     }
+
+    self.link.init();
+    window_manager.windows.append(self);
+
     if (output == null) output = window_manager.outputs.first();
     self.send(output);
+
     var seat_iterator = window_manager.seats.iterator(.forward);
     while (seat_iterator.next()) |seat| seat.focus(self);
+
     log.debug("{f} has been created.", .{self});
 }
 
 pub fn destroy(self: *Self) void {
     log.debug("{f} is about to be destroyed.", .{self});
+
     self.send(null);
+
     var fallback: ?*Self = null;
     if (self.output) |output| {
         var each_window = self.iterate(.reverse);
@@ -58,10 +65,13 @@ pub fn destroy(self: *Self) void {
             }
         }
     }
+
     self.link.remove();
+
     if (fallback == null) fallback = self.window_manager.windows.last();
     var seat_iterator = self.window_manager.seats.iterator(.forward);
     while (seat_iterator.next()) |seat| if (seat.window == self) seat.focus(fallback);
+
     self.river_node.destroy();
     self.river_window.destroy();
     std.heap.c_allocator.destroy(self);
@@ -127,7 +137,7 @@ pub fn manage(self: *Self) void {
 
         self.sticky = false;
         if (self.output) |output| {
-            if (self.view & (@as(u10, 1) << (output.view - 1)) != 0) {
+            if (self.views & (@as(u10, 1) << (output.view - 1)) != 0) {
                 self.sticky = true;
             }
         }
@@ -175,7 +185,7 @@ pub fn setWeight(self: *Self, weight: i32) void {
 pub fn setSticky(self: *Self, sticky: bool) void {
     if (self.sticky == sticky) return;
     if (self.output) |output| {
-        self.view ^= @as(u10, 1) << (output.view - 1);
+        self.views ^= @as(u10, 1) << (output.view - 1);
         self.dirty = true;
         if (!self.focused) output.dirty = true;
     }
@@ -201,10 +211,6 @@ pub fn swap(self: *Self, another: *Self) void {
     if (another.visible) {
         if (another.output) |output| output.dirty = true;
     }
-}
-
-pub fn close(self: *Self) void {
-    self.river_window.close();
 }
 
 pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {

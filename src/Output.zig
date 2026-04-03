@@ -23,26 +23,47 @@ view: u4 = 1,
 pub fn bind(window_manager: *WindowManager, river_output: *river.OutputV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
     river_output.setListener(*Self, river_output_listener, self);
+
     const river_layer_shell_output = window_manager.river_layer_shell.getOutput(river_output) catch unreachable;
     river_layer_shell_output.setListener(*Self, river_layer_shell_output_listener, self);
+
     self.* = .{
         .window_manager = window_manager,
         .river_output = river_output,
         .river_layer_shell_output = river_layer_shell_output,
     };
+
     self.link.init();
     window_manager.outputs.append(self);
+
     var window_iterator = window_manager.windows.iterator(.forward);
     while (window_iterator.next()) |window| if (window.output == null) window.send(self);
+
     log.debug("{f} has been created.", .{self});
 }
 
 pub fn destroy(self: *Self) void {
     log.debug("{f} is about to be destroyed.", .{self});
+
     self.link.remove();
-    const fallback = self.window_manager.outputs.first();
-    var window_iterator = self.window_manager.windows.iterator(.forward);
-    while (window_iterator.next()) |window| if (window.output == self) window.send(fallback);
+
+    var fallback: ?*Self = null;
+    {
+        var window_iterator = self.window_manager.windows.iterator(.reverse);
+        while (window_iterator.next()) |window| {
+            if (window.output != self) {
+                fallback = window.output;
+                break;
+            }
+        }
+    }
+    {
+        var window_iterator = self.window_manager.windows.iterator(.forward);
+        while (window_iterator.next()) |window| {
+            if (window.output == self) window.send(fallback);
+        }
+    }
+
     self.river_output.destroy();
     self.river_layer_shell_output.destroy();
     std.heap.c_allocator.destroy(self);
@@ -90,6 +111,19 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
     };
 }
 
+pub fn manage(self: *Self) void {
+    if (self.area == null) return;
+
+    if (self.dirty) {
+        defer log.debug("{f} has updated state.", .{self});
+
+        if (self.window_manager.windows.first()) |first_window| {
+            _ = self.layout(first_window, 0);
+        }
+        self.dirty = false;
+    }
+}
+
 pub fn setView(self: *Self, view: u4) void {
     var new_view = view;
     if (new_view < 1) {
@@ -97,46 +131,37 @@ pub fn setView(self: *Self, view: u4) void {
     } else if (new_view > 10) {
         new_view = 10;
     }
+
     if (new_view == self.view) return;
     self.view = new_view;
+
     self.dirty = true;
-    {
-        var window_iterator = self.window_manager.windows.iterator(.forward);
-        while (window_iterator.next()) |window| {
-            if (window.output == self) window.dirty = true;
-        }
+    var window_iterator = self.window_manager.windows.iterator(.forward);
+    while (window_iterator.next()) |window| {
+        if (window.output == self) window.dirty = true;
     }
 }
 
-pub fn manage(self: *Self) void {
-    if (self.area == null) return;
-
-    if (self.dirty) {
-        defer log.debug("{f} has updated state.", .{self});
-
-        _ = self.layout(&self.window_manager.windows.link, 0);
-        self.dirty = false;
+fn layout(self: *Self, original_window: *Window, occupied: i32) i32 {
+    const last_window = self.window_manager.windows.last();
+    var window = original_window;
+    while (window.output != self or !window.visible) : (window = window.iterate(.forward)) {
+        if (window == last_window) return 0;
     }
-}
-
-fn layout(self: *Self, original_link: *wl.list.Link, occupied: i32) i32 {
-    var link = original_link;
-    while (link.next.? != &self.window_manager.windows.link) : (link = link.next.?) {
-        const each_window: *Window = @fieldParentPtr("link", link.next.?);
-        if (each_window.output == self and each_window.visible) {
-            const weight: i32 = each_window.weight;
-            const needed: i32 = self.layout(&each_window.link, occupied + weight);
-            const total: i32 = occupied + weight + needed;
-            const gap: i32 = config.layout_gap;
-            const total_width: i32 = self.area.?.w - gap;
-            const occupied_width: i32 = @divFloor(occupied * total_width, total);
-            const weight_width: i32 = @divFloor(weight * total_width, total);
-            each_window.river_node.setPosition(gap + occupied_width + config.border_width, gap + config.border_width);
-            each_window.river_window.proposeDimensions(weight_width - gap - 2 * config.border_width, self.area.?.h - 2 * gap - 2 * config.border_width);
-            return weight + needed;
-        }
-    }
-    return 0;
+    const weight: i32 = window.weight;
+    const needed: i32 = if (window == last_window) 0 else self.layout(window.iterate(.forward), occupied + weight);
+    const total: i32 = occupied + weight + needed;
+    const gap: i32 = config.layout_gap;
+    const total_width: i32 = self.area.?.w - gap;
+    const occupied_width: i32 = @divFloor(occupied * total_width, total);
+    const weight_width: i32 = @divFloor(weight * total_width, total);
+    const x: i32 = gap + occupied_width + config.border_width;
+    const y: i32 = gap + config.border_width;
+    const w: i32 = weight_width - gap - 2 * config.border_width;
+    const h: i32 = self.area.?.h - 2 * gap - 2 * config.border_width;
+    window.river_node.setPosition(x, y);
+    window.river_window.proposeDimensions(w, h);
+    return weight + needed;
 }
 
 pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {

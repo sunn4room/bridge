@@ -32,8 +32,7 @@ pub fn bind(window_manager: *WindowManager, river_seat: *river.SeatV1) void {
         .window_manager = window_manager,
         .river_seat = river_seat,
     };
-    self.link.init();
-    window_manager.seats.append(self);
+
     self.xkb_bindings.init();
     self.pointer_bindings.init();
     for (&config.bindings) |*binding| {
@@ -48,18 +47,27 @@ pub fn bind(window_manager: *WindowManager, river_seat: *river.SeatV1) void {
             },
         }
     }
+
+    self.link.init();
+    window_manager.seats.append(self);
+
     self.focus(window_manager.windows.last());
+
     log.debug("{f} has been created.", .{self});
 }
 
 pub fn destroy(self: *Self) void {
     log.debug("{f} is about to be destroyed.", .{self});
+
     self.focus(null);
+
+    self.link.remove();
+
     var xkb_binding_iterator = self.xkb_bindings.iterator(.forward);
     while (xkb_binding_iterator.next()) |xkb_binding| xkb_binding.destroy();
     var pointer_binding_iterator = self.pointer_bindings.iterator(.forward);
     while (pointer_binding_iterator.next()) |pointer_binding| pointer_binding.destroy();
-    self.link.remove();
+
     self.river_seat.destroy();
     std.heap.c_allocator.destroy(self);
 }
@@ -86,14 +94,43 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
 
 pub fn manage(self: *Self) void {
     if (self.new) {
-        self.enable();
+        var xkb_binding_iterator = self.xkb_bindings.iterator(.forward);
+        while (xkb_binding_iterator.next()) |xkb_binding| xkb_binding.river_xkb_binding.enable();
+
+        var pointer_binding_iterator = self.pointer_bindings.iterator(.forward);
+        while (pointer_binding_iterator.next()) |pointer_binding| pointer_binding.river_pointer_binding.enable();
+
+        self.enabled = true;
         self.new = false;
     }
 
     if (self.action) |action| {
+        log.debug("{f} is about to perform {s} action.", .{ self, @tagName(action) });
         switch (action) {
             .toggle_passthrough => {
-                if (self.enabled) self.disable() else self.enable();
+                self.enabled = !self.enabled;
+
+                var xkb_binding_iterator = self.xkb_bindings.iterator(.forward);
+                while (xkb_binding_iterator.next()) |xkb_binding| {
+                    if (xkb_binding.action != .toggle_passthrough) {
+                        if (self.enabled) {
+                            xkb_binding.river_xkb_binding.enable();
+                        } else {
+                            xkb_binding.river_xkb_binding.disable();
+                        }
+                    }
+                }
+
+                var pointer_binding_iterator = self.pointer_bindings.iterator(.forward);
+                while (pointer_binding_iterator.next()) |pointer_binding| {
+                    if (pointer_binding.action != .toggle_passthrough) {
+                        if (self.enabled) {
+                            pointer_binding.river_pointer_binding.enable();
+                        } else {
+                            pointer_binding.river_pointer_binding.disable();
+                        }
+                    }
+                }
             },
             .spawn => |cmd| {
                 util.spawn(cmd);
@@ -218,13 +255,11 @@ pub fn manage(self: *Self) void {
             },
             .set_output_view => |view| {
                 if (self.window) |window| {
-                    if (window.output) |output| {
-                        output.setView(view);
-                    }
+                    if (window.output) |output| output.setView(view);
                 }
             },
             .close_window => {
-                if (self.window) |window| window.close();
+                if (self.window) |window| window.river_window.close();
             },
             .quit => {
                 self.window_manager.running = false;
@@ -232,24 +267,6 @@ pub fn manage(self: *Self) void {
         }
         self.action = null;
     }
-}
-
-pub fn enable(self: *Self) void {
-    var xkb_binding_iterator = self.xkb_bindings.iterator(.forward);
-    while (xkb_binding_iterator.next()) |xkb_binding| xkb_binding.river_xkb_binding.enable();
-    var pointer_binding_iterator = self.pointer_bindings.iterator(.forward);
-    while (pointer_binding_iterator.next()) |pointer_binding| pointer_binding.river_pointer_binding.enable();
-    self.enabled = true;
-    log.debug("{f} has been enabled.", .{self});
-}
-
-pub fn disable(self: *Self) void {
-    var xkb_binding_iterator = self.xkb_bindings.iterator(.forward);
-    while (xkb_binding_iterator.next()) |xkb_binding| if (xkb_binding.action != .toggle_passthrough) xkb_binding.river_xkb_binding.disable();
-    var pointer_binding_iterator = self.pointer_bindings.iterator(.forward);
-    while (pointer_binding_iterator.next()) |pointer_binding| if (pointer_binding.action != .toggle_passthrough) pointer_binding.river_pointer_binding.disable();
-    self.enabled = false;
-    log.debug("{f} has been disabled.", .{self});
 }
 
 pub fn focus(self: *Self, window: ?*Window) void {
@@ -262,7 +279,9 @@ pub fn focus(self: *Self, window: ?*Window) void {
     }
     self.window = window;
     if (self.window) |new_window| {
-        new_window.dirty = true;
+        if (!new_window.focused) {
+            new_window.dirty = true;
+        }
         if (!new_window.visible) {
             if (new_window.output) |output| output.dirty = true;
         }
