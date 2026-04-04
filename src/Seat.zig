@@ -310,7 +310,16 @@ pub fn manage(self: *Self) void {
             },
             .set_output_view => |view| {
                 if (self.window) |window| {
-                    if (window.output) |output| output.setView(view);
+                    if (window.output) |output| {
+                        output.setView(view);
+                        var window_iterator = self.window_manager.windows.iterator(.forward);
+                        while (window_iterator.next()) |each_window| {
+                            if (each_window.output == output and each_window.views & (@as(u10, 1) << (output.view - 1)) != 0) {
+                                self.focus(each_window);
+                                break;
+                            }
+                        }
+                    }
                 }
             },
             .close_window => {
