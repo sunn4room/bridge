@@ -37,14 +37,9 @@ pub const app_icons = [_]struct { id: [*:0]const u8, icon: [*:0]const u8 }{
 };
 
 pub const startup_cmds = [_][]const []const u8{
-    &.{ "sh", "-c", "swaybg -m fill -i ~/.config/wallpaper" },
-    &.{"kanshi"},
-    &.{"fcitx5"},
     &.{ "foot", "-s" },
-    &.{ "wl-clip-persist", "--clipboard", "regular" },
 };
 
-// pub const terminal = "foot";
 pub const terminal = "footclient";
 pub const launcher = "fuzzel";
 
@@ -86,21 +81,31 @@ pub const bindings = [_]Binding{
     },
     .{
         .modifiers = .{ .mod4 = true },
-        .trigger = .{ .keysym = .l },
+        .trigger = .{ .keysym = .Tab },
         .action = .{ .iterate_window_focus = .forward },
     },
     .{
         .modifiers = .{ .mod4 = true },
-        .trigger = .{ .keysym = .h },
+        .trigger = .{ .keysym = .Tab, .shift = true },
         .action = .{ .iterate_window_focus = .reverse },
     },
     .{
-        .modifiers = .{ .mod4 = true, .shift = true },
+        .modifiers = .{ .mod4 = true },
+        .trigger = .{ .keysym = .l, .shift = true },
+        .action = .{ .iterate_window_focus = .forward },
+    },
+    .{
+        .modifiers = .{ .mod4 = true },
+        .trigger = .{ .keysym = .h, .shift = true },
+        .action = .{ .iterate_window_focus = .reverse },
+    },
+    .{
+        .modifiers = .{ .mod4 = true },
         .trigger = .{ .keysym = .l },
         .action = .{ .iterate_sticky_window_focus = .forward },
     },
     .{
-        .modifiers = .{ .mod4 = true, .shift = true },
+        .modifiers = .{ .mod4 = true },
         .trigger = .{ .keysym = .h },
         .action = .{ .iterate_sticky_window_focus = .reverse },
     },

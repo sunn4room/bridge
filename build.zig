@@ -48,4 +48,14 @@ pub fn build(b: *std.Build) void {
     const fcftModule = b.dependency("fcft", .{}).module("fcft");
     mainModule.addImport("fcft", fcftModule);
     exe.linkSystemLibrary("fcft");
+
+    const config_file = "src/config.zig";
+    const backup_config_file = "src/config.def.zig";
+    std.fs.cwd().access(config_file, .{}) catch |err| switch (err) {
+        error.FileNotFound => {
+            std.fs.cwd().copyFile(backup_config_file, std.fs.cwd(), config_file, .{}) catch unreachable;
+            std.log.info("{s} -> {s}", .{ backup_config_file, config_file });
+        },
+        else => unreachable,
+    };
 }
