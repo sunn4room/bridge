@@ -22,6 +22,7 @@ area: ?Rect = null,
 view: u4 = 1,
 bar: *Bar = undefined,
 buttons: [10]?Rect = .{null} ** 10,
+fullscreen: ?*Window = null,
 
 pub fn bind(window_manager: *WindowManager, river_output: *river.OutputV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
@@ -127,8 +128,16 @@ pub fn manage(self: *Self) void {
     if (self.dirty) {
         defer log.debug("{f} has updated state.", .{self});
 
-        if (self.window_manager.windows.first()) |first_window| {
-            _ = self.layout(first_window, 0);
+        if (self.fullscreen) |fullscreen_window| {
+            if (!fullscreen_window.fullscreen) {
+                fullscreen_window.river_window.informFullscreen();
+                fullscreen_window.river_window.fullscreen(self.river_output);
+                fullscreen_window.fullscreen = true;
+            }
+        } else {
+            if (self.window_manager.windows.first()) |first_window| {
+                _ = self.layout(first_window, 0);
+            }
         }
         self.dirty = false;
     }
@@ -153,11 +162,23 @@ pub fn setView(self: *Self, view: u4) void {
     }
 }
 
+pub fn setFullScreen(self: *Self, window: ?*Window) void {
+    if (self.fullscreen == window) return;
+    if (window) |nonull_window| nonull_window.send(self);
+    self.fullscreen = window;
+    self.dirty = true;
+}
+
 fn layout(self: *Self, original_window: *Window, occupied: i32) i32 {
     const last_window = self.window_manager.windows.last();
     var window = original_window;
     while (window.output != self or !window.visible) : (window = window.iterate(.forward)) {
         if (window == last_window) return 0;
+    }
+    if (window.fullscreen) {
+        window.river_window.informNotFullscreen();
+        window.river_window.exitFullscreen();
+        window.fullscreen = false;
     }
     const weight: i32 = window.weight;
     const needed: i32 = if (window == last_window) 0 else self.layout(window.iterate(.forward), occupied + weight);

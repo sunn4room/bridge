@@ -23,6 +23,7 @@ weight: u4 = 5,
 focused: bool = false,
 visible: bool = false,
 sticky: bool = false,
+fullscreen: bool = false,
 output: ?*Output = null,
 views: u10 = 0,
 buttons: [2]?Rect = .{null} ** 2,
@@ -88,6 +89,22 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
         .app_id => |app| {
             self.setIcon(app.app_id);
         },
+        .fullscreen_requested => |requested| {
+            var output: ?*Output = null;
+            if (requested.output) |river_output| {
+                output = @ptrCast(@alignCast(river_output.getUserData().?));
+            }
+            if (output == null) output = self.output;
+            self.send(output);
+            if (output) |nonull_output| {
+                nonull_output.setFullScreen(self);
+            }
+        },
+        .exit_fullscreen_requested => {
+            if (self.output) |output| {
+                if (output.fullscreen == self) output.setFullScreen(null);
+            }
+        },
         .dimensions,
         .dimensions_hint,
         .title,
@@ -98,8 +115,6 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
         .show_window_menu_requested,
         .maximize_requested,
         .unmaximize_requested,
-        .fullscreen_requested,
-        .exit_fullscreen_requested,
         .minimize_requested,
         .unreliable_pid,
         => {

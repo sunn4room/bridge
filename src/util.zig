@@ -51,6 +51,7 @@ pub const Action = union(enum) {
     toggle_passthrough,
     spawn: []const []const u8,
     toggle_window_sticky,
+    toggle_window_fullscreen,
     iterate_window_weight: wl.list.Direction,
     iterate_window_focus: wl.list.Direction,
     iterate_sticky_window_focus: wl.list.Direction,

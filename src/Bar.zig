@@ -101,7 +101,7 @@ pub fn manage(self: *Self) void {
         defer log.debug("{f} has updated state.", .{self});
 
         self.river_node.setPosition(self.output.area.?.x, self.output.area.?.y);
-        self.river_node.placeTop();
+        self.river_node.placeBottom();
 
         const width: u31 = @divFloor(self.output.area.?.w * self.scale, 120);
         const height: u31 = @intCast(self.font.height);

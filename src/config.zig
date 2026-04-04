@@ -38,8 +38,8 @@ pub const app_icons = [_]struct { id: [*:0]const u8, icon: [*:0]const u8 }{
 
 pub const startup_cmds = [_][]const []const u8{
     &.{ "sh", "-c", "swaybg -m fill -i ~/.config/wallpaper" },
-    &.{ "kanshi" },
-    &.{ "fcitx5" },
+    &.{"kanshi"},
+    &.{"fcitx5"},
     &.{ "foot", "-s" },
     &.{ "wl-clip-persist", "--clipboard", "regular" },
 };
@@ -68,6 +68,11 @@ pub const bindings = [_]Binding{
         .modifiers = .{ .mod4 = true },
         .trigger = .{ .keysym = .s },
         .action = .toggle_window_sticky,
+    },
+    .{
+        .modifiers = .{ .mod4 = true },
+        .trigger = .{ .keysym = .a },
+        .action = .toggle_window_fullscreen,
     },
     .{
         .modifiers = .{ .mod4 = true },

@@ -19,10 +19,12 @@ const Self = @This();
 
 window_manager: *WindowManager,
 river_seat: *river.SeatV1,
+river_layer_shell_seat: *river.LayerShellSeatV1,
 link: wl.list.Link = undefined,
 xkb_bindings: wl.list.Head(XkbBinding, .link) = undefined,
 pointer_bindings: wl.list.Head(PointerBinding, .link) = undefined,
 new: bool = true,
+layer_focus: LayerFocus = .none,
 enabled: bool = false,
 action: ?Action = null,
 window: ?*Window = null,
@@ -32,9 +34,12 @@ y: i32 = undefined,
 pub fn bind(window_manager: *WindowManager, river_seat: *river.SeatV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
     river_seat.setListener(*Self, river_seat_listener, self);
+    const river_layer_shell_seat = window_manager.river_layer_shell.getSeat(river_seat) catch unreachable;
+    river_layer_shell_seat.setListener(*Self, river_layer_shell_seat_listener, self);
     self.* = .{
         .window_manager = window_manager,
         .river_seat = river_seat,
+        .river_layer_shell_seat = river_layer_shell_seat,
     };
 
     self.xkb_bindings.init();
@@ -116,6 +121,21 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
     }
 }
 
+fn river_layer_shell_seat_listener(_: *river.LayerShellSeatV1, event: river.LayerShellSeatV1.Event, self: *Self) void {
+    log.debug("{f} received {s} event.", .{ self, @tagName(event) });
+    switch (event) {
+        .focus_exclusive => self.layer_focus = .exclusive,
+        .focus_non_exclusive => self.layer_focus = .non_exclusive,
+        .focus_none => self.layer_focus = .none,
+    }
+}
+
+pub const LayerFocus = enum {
+    exclusive,
+    non_exclusive,
+    none,
+};
+
 pub fn manage(self: *Self) void {
     if (self.new) {
         var xkb_binding_iterator = self.xkb_bindings.iterator(.forward);
@@ -171,6 +191,17 @@ pub fn manage(self: *Self) void {
                             }
                         } else {
                             window.setSticky(true);
+                        }
+                    }
+                }
+            },
+            .toggle_window_fullscreen => {
+                if (self.window) |window| {
+                    if (window.output) |output| {
+                        if (window.fullscreen) {
+                            output.setFullScreen(null);
+                        } else {
+                            output.setFullScreen(window);
                         }
                     }
                 }
@@ -293,7 +324,21 @@ pub fn manage(self: *Self) void {
     }
 }
 
-pub fn focus(self: *Self, window: ?*Window) void {
+pub fn focus(self: *Self, original_window: ?*Window) void {
+    var window: ?*Window = original_window;
+
+    switch (self.layer_focus) {
+        .exclusive => window = null,
+        .non_exclusive => self.layer_focus = .none,
+        .none => {},
+    }
+
+    if (window) |nonull_window| {
+        if (nonull_window.output) |output| {
+            if (output.fullscreen) |fullscreen| window = fullscreen;
+        }
+    }
+
     if (self.window == window) return;
     if (self.window) |old_window| {
         old_window.dirty = true;
