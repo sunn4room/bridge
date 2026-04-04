@@ -51,9 +51,10 @@ pub fn build(b: *std.Build) void {
 
     const config_file = "src/config.zig";
     const backup_config_file = "src/config.def.zig";
-    std.fs.cwd().access(config_file, .{}) catch |err| switch (err) {
+    const project_dir = b.build_root.handle;
+    project_dir.access(config_file, .{}) catch |err| switch (err) {
         error.FileNotFound => {
-            std.fs.cwd().copyFile(backup_config_file, std.fs.cwd(), config_file, .{}) catch unreachable;
+            project_dir.copyFile(backup_config_file, project_dir, config_file, .{}) catch unreachable;
             std.log.info("{s} -> {s}", .{ backup_config_file, config_file });
         },
         else => unreachable,
