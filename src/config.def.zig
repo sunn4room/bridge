@@ -85,18 +85,18 @@ pub const bindings = [_]Binding{
         .action = .{ .iterate_window_focus = .forward },
     },
     .{
-        .modifiers = .{ .mod4 = true },
-        .trigger = .{ .keysym = .Tab, .shift = true },
+        .modifiers = .{ .mod4 = true, .shift = true },
+        .trigger = .{ .keysym = .Tab },
         .action = .{ .iterate_window_focus = .reverse },
     },
     .{
-        .modifiers = .{ .mod4 = true },
-        .trigger = .{ .keysym = .l, .shift = true },
+        .modifiers = .{ .mod4 = true, .shift = true },
+        .trigger = .{ .keysym = .l },
         .action = .{ .iterate_window_focus = .forward },
     },
     .{
-        .modifiers = .{ .mod4 = true },
-        .trigger = .{ .keysym = .h, .shift = true },
+        .modifiers = .{ .mod4 = true, .shift = true },
+        .trigger = .{ .keysym = .h },
         .action = .{ .iterate_window_focus = .reverse },
     },
     .{
