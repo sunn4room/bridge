@@ -9,6 +9,8 @@ A horizontal-tiling window manager based on [river](https://codeberg.org/river/r
 - Each window has a weight from 1 to 10.
 - All focused or sticky windows are tiled horizontally on the monitor according to their weight.
 
+![bridge screenshot](screenshot.png)
+
 ## Why Bridge?
 
 I have been using dwm for many years. I found that:
