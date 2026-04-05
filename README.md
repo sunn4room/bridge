@@ -7,24 +7,26 @@
 A horizontal-tiling window manager based on [river](https://codeberg.org/river/river/) wayland compositor.
 
 - Each window has a weight from 1 to 10.
-- All focused or sticky windows are tiled horizontally on the monitor according to their weight.
+- Focused or sticky windows are tiled horizontally on the screen according to their weight. Other windows is hidden.
+- Each view contains a group of sticky status.
+- Each screen has 10 views.
+- Switch window floating status using the mouse.
 
 ![bridge screenshot](screenshot.png)
 
 ## Why Bridge?
 
-I have been using dwm for many years. I found that:
-
-- Most of the time I only have one window in my monitor.
-- Occasionally I have more than one window when I need to compare window contents.
-- Dwm primary/stack layout is ugly and useless.
-- Dwm tag system is very powerful but also very attention-demanding.
-
-Bridge is very simple. Bridge has no tag. Bridge manages windows directly. Bridge only stick what you want.
+- Bridge is Lightweight. Bridge has 2000+ lines of zig source code.
+- Bridge is Attention-friendly. You should focus on whether the window is sticky, not on where the window is placed.
+- Bridge has Built-in status bar. The bar is used to show the informations about views, windows and weights.
 
 ## Why not Bridge?
 
-Bridge is not good at managing more than 10 windows.
+- Bridge is customized through editing its source code.
+- Bridge does not support Animations.
+- Bridge built-in bar only displays icons, not other information such as the time and date.
+- Bridge becomes very ugly when tiling 3+ windows.
+- Bridge is not good at managing 10+ windows.
 
 ## How to use Bridge?
 
@@ -32,6 +34,8 @@ Bridge is not good at managing more than 10 windows.
 
 - wayland
 - xkbcommon
+- fcft
+- pixman
 - zig (build)
 
 ### Build
