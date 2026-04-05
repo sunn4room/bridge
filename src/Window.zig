@@ -9,6 +9,7 @@ const log = util.log;
 const Rect = util.Rect;
 const WindowManager = @import("WindowManager.zig");
 const Output = @import("Output.zig");
+const Seat = @import("Seat.zig");
 
 const Self = @This();
 
@@ -26,6 +27,8 @@ sticky: bool = false,
 output: ?*Output = null,
 views: u10 = 0,
 buttons: [2]?Rect = .{null} ** 2,
+area: Rect = undefined,
+floating: bool = false,
 
 pub fn bind(window_manager: *WindowManager, river_window: *river.WindowV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
@@ -72,7 +75,17 @@ pub fn destroy(self: *Self) void {
 
     if (fallback == null) fallback = self.window_manager.windows.last();
     var seat_iterator = self.window_manager.seats.iterator(.forward);
-    while (seat_iterator.next()) |seat| if (seat.window == self) seat.focus(fallback);
+    while (seat_iterator.next()) |seat| {
+        if (seat.focused == self) {
+            seat.focus(fallback);
+        }
+        if (seat.op) |op| {
+            if (op.window == self) {
+                seat.river_seat.opEnd();
+                seat.op = null;
+            }
+        }
+    }
 
     self.river_node.destroy();
     self.river_window.destroy();
@@ -104,13 +117,26 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
                 if (output.fullscreen == self) output.setFullScreen(null);
             }
         },
-        .dimensions,
+        .dimensions => |dimensions| {
+            self.area.w = @intCast(dimensions.width);
+            self.area.h = @intCast(dimensions.height);
+        },
+        .pointer_move_requested => |move| {
+            if (move.seat) |river_seat| {
+                const seat: *Seat = @ptrCast(@alignCast(river_seat.getUserData().?));
+                seat.move(self);
+            }
+        },
+        .pointer_resize_requested => |resize| {
+            if (resize.seat) |river_seat| {
+                const seat: *Seat = @ptrCast(@alignCast(river_seat.getUserData().?));
+                seat.resize(self, resize.edges);
+            }
+        },
         .dimensions_hint,
         .title,
         .parent,
         .decoration_hint,
-        .pointer_move_requested,
-        .pointer_resize_requested,
         .show_window_menu_requested,
         .maximize_requested,
         .unmaximize_requested,
@@ -147,9 +173,11 @@ pub fn manage(self: *Self) void {
         self.focused = false;
         var seat_iterator = self.window_manager.seats.iterator(.forward);
         while (seat_iterator.next()) |seat| {
-            if (seat.window == self) {
-                seat.river_seat.focusWindow(self.river_window);
+            if (seat.focused == self) {
                 self.focused = true;
+                if (seat.layer_focus == .none) {
+                    seat.river_seat.focusWindow(self.river_window);
+                }
             }
         }
 
@@ -208,6 +236,14 @@ pub fn setSticky(self: *Self, sticky: bool) void {
         self.dirty = true;
         output.bar.dirty = true;
         if (!self.focused) output.dirty = true;
+    }
+}
+
+pub fn setFloating(self: *Self, floating: bool) void {
+    if (self.floating == floating) return;
+    self.floating = floating;
+    if (self.output) |output| {
+        if (self.visible) output.dirty = true;
     }
 }
 

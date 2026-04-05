@@ -305,6 +305,16 @@ pub const bindings = [_]Binding{
         .action = .close_window,
     },
     .{
+        .modifiers = .{ .mod4 = true },
+        .trigger = .{ .button = .left },
+        .action = .enable_window_floating,
+    },
+    .{
+        .modifiers = .{ .mod4 = true },
+        .trigger = .{ .button = .right },
+        .action = .disable_window_floating,
+    },
+    .{
         .modifiers = .{ .mod4 = true, .shift = true },
         .trigger = .{ .keysym = .Escape },
         .action = .quit,

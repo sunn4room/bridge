@@ -27,9 +27,11 @@ new: bool = true,
 layer_focus: LayerFocus = .none,
 enabled: bool = false,
 action: ?Action = null,
-window: ?*Window = null,
+hovered: ?*Window = null,
+focused: ?*Window = null,
 x: i32 = undefined,
 y: i32 = undefined,
+op: ?Operation = null,
 
 pub fn bind(window_manager: *WindowManager, river_seat: *river.SeatV1) void {
     const self = std.heap.c_allocator.create(Self) catch unreachable;
@@ -91,6 +93,11 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
             self.x = position.x;
             self.y = position.y;
         },
+        .window_interaction => |interaction| {
+            if (interaction.window) |river_window| {
+                self.focus(@ptrCast(@alignCast(river_window.getUserData().?)));
+            }
+        },
         .shell_surface_interaction => {
             var window_iterator = self.window_manager.windows.iterator(.forward);
             while (window_iterator.next()) |window| {
@@ -109,12 +116,22 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
                 }
             }
         },
+        .pointer_enter => |enter| {
+            if (enter.window) |river_window| {
+                self.hovered = @ptrCast(@alignCast(river_window.getUserData().?));
+            }
+        },
+        .pointer_leave => {
+            self.hovered = null;
+        },
+        .op_delta => |delta| {
+            self.op.?.dx = delta.dx;
+            self.op.?.dy = delta.dy;
+        },
+        .op_release => {
+            self.op.?.running = false;
+        },
         .wl_seat,
-        .pointer_enter,
-        .pointer_leave,
-        .window_interaction,
-        .op_delta,
-        .op_release,
         => {
             log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
         },
@@ -180,7 +197,7 @@ pub fn manage(self: *Self) void {
                 util.spawn(cmd);
             },
             .toggle_window_sticky => {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     if (window.output) |output| {
                         if (window.sticky) {
                             var window_iterator = self.window_manager.windows.iterator(.forward);
@@ -196,7 +213,7 @@ pub fn manage(self: *Self) void {
                 }
             },
             .toggle_window_fullscreen => {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     if (window.output) |output| {
                         if (output.fullscreen == window) {
                             output.setFullScreen(null);
@@ -207,7 +224,7 @@ pub fn manage(self: *Self) void {
                 }
             },
             .iterate_window_weight => |dir| {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     const weight = switch (dir) {
                         .forward => window.weight + 1,
                         .reverse => window.weight - 1,
@@ -216,7 +233,7 @@ pub fn manage(self: *Self) void {
                 }
             },
             .iterate_window_focus => |dir| {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     if (window.output) |output| {
                         var each_window = window.iterate(dir);
                         while (each_window != window) : (each_window = each_window.iterate(dir)) {
@@ -229,7 +246,7 @@ pub fn manage(self: *Self) void {
                 }
             },
             .iterate_sticky_window_focus => |dir| {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     if (window.output) |output| {
                         var each_window = window.iterate(dir);
                         while (each_window != window) : (each_window = each_window.iterate(dir)) {
@@ -242,7 +259,7 @@ pub fn manage(self: *Self) void {
                 }
             },
             .iterate_window_order => |dir| {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     if (window.output) |output| {
                         var each_window = window.iterate(dir);
                         while (each_window != window) : (each_window = each_window.iterate(dir)) {
@@ -255,7 +272,7 @@ pub fn manage(self: *Self) void {
                 }
             },
             .iterate_output_view => |dir| {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     if (window.output) |output| {
                         const view = switch (dir) {
                             .forward => output.view + 1,
@@ -266,7 +283,7 @@ pub fn manage(self: *Self) void {
                 }
             },
             .iterate_output_focus => |dir| {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     if (window.output) |output| {
                         var each_output = output.iterate(dir);
                         each_output: while (each_output != output) : (each_output = each_output.iterate(dir)) {
@@ -282,14 +299,14 @@ pub fn manage(self: *Self) void {
                 }
             },
             .iterate_window_output => |dir| {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     if (window.output) |output| {
                         window.send(output.iterate(dir));
                     }
                 }
             },
             .set_window_focus => |index| {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     if (window.output) |output| {
                         var counter: i32 = 0;
                         var window_iterator = self.window_manager.windows.iterator(.forward);
@@ -306,10 +323,10 @@ pub fn manage(self: *Self) void {
                 }
             },
             .set_window_weight => |weight| {
-                if (self.window) |window| window.setWeight(@intCast(weight));
+                if (self.focused) |window| window.setWeight(@intCast(weight));
             },
             .set_output_view => |view| {
-                if (self.window) |window| {
+                if (self.focused) |window| {
                     if (window.output) |output| {
                         output.setView(view);
                         var window_iterator = self.window_manager.windows.iterator(.forward);
@@ -323,7 +340,29 @@ pub fn manage(self: *Self) void {
                 }
             },
             .close_window => {
-                if (self.window) |window| window.river_window.close();
+                if (self.focused) |window| window.river_window.close();
+            },
+            .enable_window_floating => {
+                if (self.hovered) |window| {
+                    var edges: river.WindowV1.Edges = .{};
+                    const left: i32 = window.area.x + @divFloor(window.area.w, 4);
+                    const right: i32 = window.area.x + @divFloor(window.area.w * 3, 4);
+                    const top: i32 = window.area.y + @divFloor(window.area.h, 4);
+                    const bottom: i32 = window.area.y + @divFloor(window.area.h * 3, 4);
+                    if (self.x < left) edges.left = true else if (self.x > right) edges.right = true;
+                    if (self.y < top) edges.top = true else if (self.y > bottom) edges.bottom = true;
+                    if (edges.left or edges.right or edges.top or edges.bottom) {
+                        self.resize(window, edges);
+                    } else {
+                        self.move(window);
+                    }
+                }
+            },
+            .disable_window_floating => {
+                if (self.hovered) |window| {
+                    self.focus(window);
+                    window.setFloating(false);
+                }
             },
             .quit => {
                 self.window_manager.running = false;
@@ -331,16 +370,68 @@ pub fn manage(self: *Self) void {
         }
         self.action = null;
     }
+
+    if (self.focused == null) {
+        self.river_seat.clearFocus();
+    } else if (self.op) |*op| {
+        if (self.focused != op.window or op.running == false) {
+            self.river_seat.opEnd();
+            switch (op.data) {
+                .resize => op.window.river_window.informResizeEnd(),
+                else => {},
+            }
+            self.op = null;
+        } else if (op.running == null) {
+            op.running = true;
+            self.river_seat.opStartPointer();
+            switch (op.data) {
+                .resize => op.window.river_window.informResizeStart(),
+                else => {},
+            }
+        } else {
+            switch (op.data) {
+                .move => |data| {
+                    const x: i32 = data.x + op.dx;
+                    const y: i32 = data.y + op.dy;
+                    op.window.river_node.setPosition(x, y);
+                    op.window.area.x = x;
+                    op.window.area.y = y;
+                },
+                .resize => |data| {
+                    var x: i32 = data.x;
+                    var y: i32 = data.y;
+                    var w: u31 = data.w;
+                    var h: u31 = data.h;
+                    if (data.edges.left) {
+                        if (data.w - op.dx > 0) {
+                            x = data.x + op.dx;
+                            w = @intCast(data.w - op.dx);
+                        }
+                    } else if (data.edges.right) {
+                        w = @intCast(data.w + op.dx);
+                    }
+                    if (data.edges.top) {
+                        if (data.h - op.dy > 0) {
+                            y = data.y + op.dy;
+                            h = @intCast(data.h - op.dy);
+                        }
+                    } else if (data.edges.bottom) {
+                        h = @intCast(data.h + op.dy);
+                    }
+                    op.window.river_node.setPosition(x, y);
+                    op.window.river_window.proposeDimensions(w, h);
+                    op.window.area.x = x;
+                    op.window.area.y = y;
+                    op.window.area.w = w;
+                    op.window.area.h = h;
+                },
+            }
+        }
+    }
 }
 
 pub fn focus(self: *Self, original_window: ?*Window) void {
     var window: ?*Window = original_window;
-
-    switch (self.layer_focus) {
-        .exclusive => window = null,
-        .non_exclusive => self.layer_focus = .none,
-        .none => {},
-    }
 
     if (window) |nonull_window| {
         if (nonull_window.output) |output| {
@@ -348,16 +439,24 @@ pub fn focus(self: *Self, original_window: ?*Window) void {
         }
     }
 
-    if (self.window == window) return;
-    if (self.window) |old_window| {
+    switch (self.layer_focus) {
+        .exclusive => return,
+        .non_exclusive => if (window != null) {
+            self.layer_focus = .none;
+        },
+        .none => {},
+    }
+
+    if (self.focused == window) return;
+    if (self.focused) |old_window| {
         old_window.dirty = true;
         if (old_window.output) |output| {
             output.bar.dirty = true;
             if (!old_window.sticky) output.dirty = true;
         }
     }
-    self.window = window;
-    if (self.window) |new_window| {
+    self.focused = window;
+    if (self.focused) |new_window| {
         if (!new_window.focused) {
             new_window.dirty = true;
         }
@@ -367,6 +466,65 @@ pub fn focus(self: *Self, original_window: ?*Window) void {
         }
     }
 }
+
+pub fn move(self: *Self, window: *Window) void {
+    if (self.op != null) return;
+    self.focus(window);
+    window.setFloating(true);
+    self.op = .{
+        .window = window,
+        .data = .{
+            .move = .{
+                .x = window.area.x,
+                .y = window.area.y,
+            },
+        },
+    };
+}
+
+pub fn resize(self: *Self, window: *Window, edges: river.WindowV1.Edges) void {
+    if (self.op != null) return;
+    self.focus(window);
+    window.setFloating(true);
+    self.op = .{
+        .window = window,
+        .data = .{
+            .resize = .{
+                .edges = edges,
+                .x = window.area.x,
+                .y = window.area.y,
+                .w = window.area.w,
+                .h = window.area.h,
+            },
+        },
+    };
+}
+
+const Move = struct {
+    x: i32,
+    y: i32,
+};
+
+const Resize = struct {
+    edges: river.WindowV1.Edges,
+    x: i32,
+    y: i32,
+    w: u31,
+    h: u31,
+};
+
+const OperationData = union(enum) {
+    move: Move,
+    resize: Resize,
+};
+
+const Operation = struct {
+    window: *Window,
+    data: OperationData,
+    dx: i32 = 0,
+    dy: i32 = 0,
+    running: ?bool = null,
+};
 
 pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {
     try writer.print("seat#{d}", .{self.river_seat.getId()});

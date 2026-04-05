@@ -144,7 +144,13 @@ pub fn manage(self: *Self) void {
             var window_iterator = self.window_manager.windows.iterator(.forward);
             while (window_iterator.next()) |window| {
                 if (window.output == self and window.visible) {
-                    total_weight += window.weight;
+                    if (window.floating) {
+                        if (window.focused) {
+                            window.river_node.placeTop();
+                        }
+                    } else {
+                        total_weight += window.weight;
+                    }
                 }
             }
 
@@ -152,7 +158,7 @@ pub fn manage(self: *Self) void {
                 var occupied_weight: i32 = 0;
                 window_iterator = self.window_manager.windows.iterator(.forward);
                 while (window_iterator.next()) |window| {
-                    if (window.output == self and window.visible) {
+                    if (window.output == self and window.visible and !window.floating) {
                         window.river_window.informNotFullscreen();
                         window.river_window.exitFullscreen();
                         const gap: i32 = config.layout_gap;
@@ -163,8 +169,15 @@ pub fn manage(self: *Self) void {
                         const y: i32 = self.window_manager.bar_height + gap + config.border_width;
                         const w: i32 = window_width - gap - 2 * config.border_width;
                         const h: i32 = self.area.?.h - self.window_manager.bar_height - 2 * gap - 2 * config.border_width;
+                        window.river_node.placeBottom();
                         window.river_node.setPosition(x, y);
                         window.river_window.proposeDimensions(w, h);
+                        window.area = .{
+                            .x = x,
+                            .y = y,
+                            .w = @intCast(w),
+                            .h = @intCast(h),
+                        };
                         occupied_weight += window.weight;
                     }
                 }

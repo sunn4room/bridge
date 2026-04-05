@@ -63,6 +63,8 @@ pub const Action = union(enum) {
     set_window_weight: i32,
     set_output_view: u4,
     close_window,
+    enable_window_floating,
+    disable_window_floating,
     quit,
 };
 
