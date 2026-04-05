@@ -164,18 +164,18 @@ pub fn manage(self: *Self) void {
                     const old_weights_position = weights_position;
                     if (window.focused) {
                         if (window.sticky) {
-                            windows_position = buffer.stamp(window_icon_run, windows_position, &config.bar_selection, &config.bar_foreground);
+                            windows_position = buffer.stamp(window_icon_run, windows_position, &config.bar_foreground, &config.bar_selection);
                             weights_position = buffer.stamp(weight_icon_run, weights_position, &config.bar_selection, &config.bar_foreground);
                         } else {
-                            windows_position = buffer.stamp(window_icon_run, windows_position, &config.bar_selection, &config.bar_theme);
+                            windows_position = buffer.stamp(window_icon_run, windows_position, &config.bar_theme, &config.bar_selection);
                             weights_position = buffer.stamp(weight_icon_run, weights_position, &config.bar_selection, &config.bar_theme);
                         }
                     } else {
                         if (window.sticky) {
-                            windows_position = buffer.stamp(window_icon_run, windows_position, null, &config.bar_foreground);
+                            windows_position = buffer.stamp(window_icon_run, windows_position, &config.bar_selection, &config.bar_foreground);
                             weights_position = buffer.stamp(weight_icon_run, weights_position, null, &config.bar_foreground);
                         } else {
-                            windows_position = buffer.stamp(window_icon_run, windows_position, null, &config.bar_selection);
+                            windows_position = buffer.stamp(window_icon_run, windows_position, null, &config.bar_foreground);
                         }
                     }
                     window.buttons = .{
