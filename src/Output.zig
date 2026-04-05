@@ -128,15 +128,46 @@ pub fn manage(self: *Self) void {
     if (self.dirty) {
         defer log.debug("{f} has updated state.", .{self});
 
-        if (self.fullscreen) |fullscreen_window| {
-            if (!fullscreen_window.fullscreen) {
-                fullscreen_window.river_window.informFullscreen();
-                fullscreen_window.river_window.fullscreen(self.river_output);
-                fullscreen_window.fullscreen = true;
+        if (self.fullscreen) |fullscreen| {
+            var window_iterator = self.window_manager.windows.iterator(.forward);
+            while (window_iterator.next()) |window| {
+                if (window == fullscreen) {
+                    window.river_window.informFullscreen();
+                    window.river_window.fullscreen(self.river_output);
+                } else {
+                    window.river_window.informNotFullscreen();
+                    window.river_window.exitFullscreen();
+                }
             }
         } else {
-            if (self.window_manager.windows.first()) |first_window| {
-                _ = self.layout(first_window, 0);
+            var total_weight: i32 = 0;
+            var window_iterator = self.window_manager.windows.iterator(.forward);
+            while (window_iterator.next()) |window| {
+                if (window.output == self and window.visible) {
+                    total_weight += window.weight;
+                }
+            }
+
+            if (total_weight != 0) {
+                var occupied_weight: i32 = 0;
+                window_iterator = self.window_manager.windows.iterator(.forward);
+                while (window_iterator.next()) |window| {
+                    if (window.output == self and window.visible) {
+                        window.river_window.informNotFullscreen();
+                        window.river_window.exitFullscreen();
+                        const gap: i32 = config.layout_gap;
+                        const total_width: i32 = self.area.?.w - gap;
+                        const occupied_width: i32 = @divFloor(total_width * occupied_weight, total_weight);
+                        const window_width: i32 = @divFloor(total_width * window.weight, total_weight);
+                        const x: i32 = gap + occupied_width + config.border_width;
+                        const y: i32 = self.window_manager.bar_height + gap + config.border_width;
+                        const w: i32 = window_width - gap - 2 * config.border_width;
+                        const h: i32 = self.area.?.h - self.window_manager.bar_height - 2 * gap - 2 * config.border_width;
+                        window.river_node.setPosition(x, y);
+                        window.river_window.proposeDimensions(w, h);
+                        occupied_weight += window.weight;
+                    }
+                }
             }
         }
         self.dirty = false;
@@ -167,33 +198,6 @@ pub fn setFullScreen(self: *Self, window: ?*Window) void {
     if (window) |nonull_window| nonull_window.send(self);
     self.fullscreen = window;
     self.dirty = true;
-}
-
-fn layout(self: *Self, original_window: *Window, occupied: i32) i32 {
-    const last_window = self.window_manager.windows.last();
-    var window = original_window;
-    while (window.output != self or !window.visible) : (window = window.iterate(.forward)) {
-        if (window == last_window) return 0;
-    }
-    if (window.fullscreen) {
-        window.river_window.informNotFullscreen();
-        window.river_window.exitFullscreen();
-        window.fullscreen = false;
-    }
-    const weight: i32 = window.weight;
-    const needed: i32 = if (window == last_window) 0 else self.layout(window.iterate(.forward), occupied + weight);
-    const total: i32 = occupied + weight + needed;
-    const gap: i32 = config.layout_gap;
-    const total_width: i32 = self.area.?.w - gap;
-    const occupied_width: i32 = @divFloor(occupied * total_width, total);
-    const weight_width: i32 = @divFloor(weight * total_width, total);
-    const x: i32 = gap + occupied_width + config.border_width;
-    const y: i32 = self.window_manager.bar_height + gap + config.border_width;
-    const w: i32 = weight_width - gap - 2 * config.border_width;
-    const h: i32 = self.area.?.h - self.window_manager.bar_height - 2 * gap - 2 * config.border_width;
-    window.river_node.setPosition(x, y);
-    window.river_window.proposeDimensions(w, h);
-    return weight + needed;
 }
 
 pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {

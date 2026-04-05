@@ -198,7 +198,7 @@ pub fn manage(self: *Self) void {
             .toggle_window_fullscreen => {
                 if (self.window) |window| {
                     if (window.output) |output| {
-                        if (window.fullscreen) {
+                        if (output.fullscreen == window) {
                             output.setFullScreen(null);
                         } else {
                             output.setFullScreen(window);
