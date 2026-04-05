@@ -134,9 +134,11 @@ pub fn manage(self: *Self) void {
                 if (window == fullscreen) {
                     window.river_window.informFullscreen();
                     window.river_window.fullscreen(self.river_output);
+                    window.river_node.placeTop();
                 } else {
                     window.river_window.informNotFullscreen();
                     window.river_window.exitFullscreen();
+                    window.river_node.placeBottom();
                 }
             }
         } else {
