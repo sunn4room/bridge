@@ -122,7 +122,7 @@ fn wl_registry_listener(_: *wl.Registry, event: wl.Registry.Event, self: *Self) 
                 self.wp_fractional_scale_manager = self.wl_registry.bind(global.name, wp.FractionalScaleManagerV1, 1) catch unreachable;
                 self.wp_fractional_scale_manager_name = global.name;
             } else if (std.mem.orderZ(u8, global.interface, river.WindowManagerV1.interface.name) == .eq) {
-                self.river_window_manager = self.wl_registry.bind(global.name, river.WindowManagerV1, 2) catch unreachable;
+                self.river_window_manager = self.wl_registry.bind(global.name, river.WindowManagerV1, 4) catch unreachable;
                 self.river_window_manager_name = global.name;
             } else if (std.mem.orderZ(u8, global.interface, river.XkbBindingsV1.interface.name) == .eq) {
                 self.river_xkb_bindings = self.wl_registry.bind(global.name, river.XkbBindingsV1, 1) catch unreachable;

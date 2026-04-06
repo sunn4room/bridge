@@ -28,7 +28,7 @@ pub fn build(b: *std.Build) void {
     waylandScanner.generate("wl_shm", 1);
     waylandScanner.generate("wp_viewporter", 1);
     waylandScanner.generate("wp_fractional_scale_manager_v1", 1);
-    waylandScanner.generate("river_window_manager_v1", 2);
+    waylandScanner.generate("river_window_manager_v1", 4);
     waylandScanner.generate("river_xkb_bindings_v1", 1);
     waylandScanner.generate("river_layer_shell_v1", 1);
     const waylandModule = b.createModule(.{

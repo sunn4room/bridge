@@ -142,6 +142,8 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
         .unmaximize_requested,
         .minimize_requested,
         .unreliable_pid,
+        .presentation_hint,
+        .identifier,
         => {
             log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
         },

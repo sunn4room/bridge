@@ -365,7 +365,7 @@ pub fn manage(self: *Self) void {
                 }
             },
             .quit => {
-                self.window_manager.running = false;
+                self.window_manager.river_window_manager.exitSession();
             },
         }
         self.action = null;
