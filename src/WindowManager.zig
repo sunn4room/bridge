@@ -14,7 +14,8 @@ const Output = @import("Output.zig");
 
 const Self = @This();
 
-wl_registry: *wl.Registry,
+allocator: std.mem.Allocator,
+wl_registry: *wl.Registry = undefined,
 wl_compositor: *wl.Compositor = undefined,
 wl_compositor_name: ?u32 = null,
 wl_shm: *wl.Shm = undefined,
@@ -31,35 +32,36 @@ river_layer_shell: *river.LayerShellV1 = undefined,
 river_layer_shell_name: ?u32 = null,
 seats: wl.list.Head(Seat, .link) = undefined,
 windows: wl.list.Head(Window, .link) = undefined,
+fwindows: wl.list.Head(Window, .flink) = undefined,
 outputs: wl.list.Head(Output, .link) = undefined,
-bar_height: u31 = undefined,
+bar_height: i32 = undefined,
 running: bool = false,
 
-pub fn create(wl_display: *wl.Display) *Self {
+pub fn create(allocator: std.mem.Allocator, wl_display: *wl.Display) *Self {
     if (!fcft.init(.auto, false, .warning)) unreachable;
     if (fcft.capabilities() & fcft.Capabilities.text_run_shaping == 0) unreachable;
 
-    const wl_registry = wl_display.getRegistry() catch unreachable;
-    const self = std.heap.c_allocator.create(Self) catch unreachable;
-    wl_registry.setListener(*Self, wl_registry_listener, self);
-    self.* = .{
-        .wl_registry = wl_registry,
-    };
+    const self = allocator.create(Self) catch unreachable;
+    self.* = .{ .allocator = allocator };
+
     self.seats.init();
     self.windows.init();
+    self.fwindows.init();
     self.outputs.init();
+
     const basic_font = util.getFont(120);
+    defer basic_font.destroy();
     self.bar_height = @intCast(basic_font.height);
-    basic_font.destroy();
 
+    self.wl_registry = wl_display.getRegistry() catch unreachable;
+    self.wl_registry.setListener(*Self, wl_registry_listener, self);
     if (wl_display.roundtrip() != .SUCCESS) unreachable;
-    self.startup();
 
-    log.info("{f} has started!", .{self});
+    log.debug("{f} has been created.", .{self});
     return self;
 }
 
-fn startup(self: *Self) void {
+pub fn startup(self: *Self) void {
     if (self.wl_compositor_name == null) {
         log.err("Global object 'wl_compositor' is missing.", .{});
     } else if (self.wl_shm_name == null) {
@@ -75,14 +77,15 @@ fn startup(self: *Self) void {
     } else if (self.river_layer_shell_name == null) {
         log.err("Global object 'river_layer_shell' is missing.", .{});
     } else {
-        for (config.startup_cmds) |cmd| util.spawn(cmd);
+        for (config.startup_cmds) |cmd| util.spawn(cmd, self.allocator);
         self.river_window_manager.setListener(*Self, river_window_manager_listener, self);
+
         self.running = true;
     }
 }
 
 pub fn destroy(self: *Self) void {
-    log.info("{f} is about to quit!", .{self});
+    log.debug("{f} is about to be destroyed.", .{self});
 
     var seat_iterator = self.seats.iterator(.forward);
     while (seat_iterator.next()) |seat| seat.destroy();
@@ -100,10 +103,8 @@ pub fn destroy(self: *Self) void {
     if (self.wl_compositor_name != null) self.wl_compositor.destroy();
 
     self.wl_registry.destroy();
-
     fcft.fini();
-
-    std.heap.c_allocator.destroy(self);
+    self.allocator.destroy(self);
 }
 
 fn wl_registry_listener(_: *wl.Registry, event: wl.Registry.Event, self: *Self) void {
@@ -170,14 +171,23 @@ fn river_window_manager_listener(_: *river.WindowManagerV1, event: river.WindowM
             log.info("{f} will receive no further events.", .{self});
             self.running = false;
         },
-        .seat => |seat| {
-            Seat.bind(self, seat.id);
+        .seat => |data| {
+            const river_seat = data.id;
+            const seat = Seat.create(self, river_seat);
+
+            self.seats.append(seat);
         },
-        .output => |output| {
-            Output.bind(self, output.id);
+        .window => |data| {
+            const river_window = data.id;
+            const window = Window.create(self, river_window);
+
+            self.fwindows.append(window);
         },
-        .window => |window| {
-            Window.bind(self, window.id);
+        .output => |data| {
+            const river_output = data.id;
+            const output = Output.create(self, river_output);
+
+            self.outputs.append(output);
         },
         .manage_start => {
             var seat_iterator = self.seats.iterator(.forward);
@@ -194,7 +204,9 @@ fn river_window_manager_listener(_: *river.WindowManagerV1, event: river.WindowM
             self.river_window_manager.renderFinish();
             log.debug("{f} has finished render sequence.\n", .{self});
         },
-        .session_locked, .session_unlocked => {
+        .session_locked,
+        .session_unlocked,
+        => {
             log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
         },
     }

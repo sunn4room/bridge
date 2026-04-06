@@ -14,7 +14,7 @@ pub fn main() void {
     };
     defer wl_display.disconnect();
 
-    const window_manager = WindowManager.create(wl_display);
+    const window_manager = WindowManager.create(std.heap.c_allocator, wl_display);
     defer window_manager.destroy();
 
     const wl_fd = wl_display.getFd();
@@ -38,6 +38,8 @@ pub fn main() void {
             .revents = 0,
         },
     };
+
+    window_manager.startup();
 
     while (window_manager.running) {
         if (wl_display.flush() != .SUCCESS) unreachable;

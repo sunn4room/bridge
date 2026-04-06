@@ -3,7 +3,7 @@ const wayland = @import("wayland");
 const Modifiers = wayland.client.river.SeatV1.Modifiers;
 
 const util = @import("util.zig");
-const Binding = util.Binding;
+const Binding = @import("Binding.zig");
 
 pub const color_background: u32 = 0x282A36FF;
 pub const color_foreground: u32 = 0xF8F8F2FF;
@@ -49,7 +49,7 @@ pub const launcher = "fuzzel";
 const mod______: Modifiers = .{ .mod4 = true };
 const mod_shift: Modifiers = .{ .mod4 = true, .shift = true };
 const mod_ctrl_: Modifiers = .{ .mod4 = true, .ctrl = true };
-pub const bindings = [_]Binding{
+pub const mappers = [_]Binding.Mapper{
     .{ .modifiers = mod______, .trigger = .{ .keysym = .Escape }, .action = .toggle_passthrough },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .Return }, .action = .{ .spawn = &.{terminal} } },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .space }, .action = .{ .spawn = &.{launcher} } },

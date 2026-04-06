@@ -13,83 +13,54 @@ const Seat = @import("Seat.zig");
 
 const Self = @This();
 
+allocator: std.mem.Allocator,
 window_manager: *WindowManager,
 river_window: *river.WindowV1,
 river_node: *river.NodeV1,
 link: wl.list.Link = undefined,
+flink: wl.list.Link = undefined,
+placed: ?*Output = null,
+area: ?Rect = null,
 new: bool = true,
-icon: [*:0]const u8 = config.app_icon_fallback,
-dirty: bool = false,
+close: bool = false,
 weight: u4 = 5,
-focused: bool = false,
-visible: bool = false,
-sticky: bool = false,
-output: ?*Output = null,
 views: u10 = 0,
-buttons: [2]?Rect = .{null} ** 2,
-area: Rect = undefined,
+sticky: bool = false,
+focused: u32 = 0,
+border_updated: bool = false,
+border: util.Color = config.border_normal,
+visible_updated: bool = false,
+visible: bool = false,
+floating_updated: bool = false,
 floating: bool = false,
+fullscreen_updated: bool = false,
+fullscreen: bool = false,
 
-pub fn bind(window_manager: *WindowManager, river_window: *river.WindowV1) void {
-    const self = std.heap.c_allocator.create(Self) catch unreachable;
-    river_window.setListener(*Self, river_window_listener, self);
+pub fn create(window_manager: *WindowManager, river_window: *river.WindowV1) *Self {
+    const self = window_manager.allocator.create(Self) catch unreachable;
     self.* = .{
+        .allocator = window_manager.allocator,
         .window_manager = window_manager,
         .river_window = river_window,
         .river_node = river_window.getNode() catch unreachable,
     };
 
-    var output: ?*Output = null;
-    if (self.window_manager.windows.last()) |last_window| {
-        if (last_window.output) |last_window_output| output = last_window_output;
-    }
-
+    river_window.setListener(*Self, river_window_listener, self);
     self.link.init();
-    window_manager.windows.append(self);
-
-    if (output == null) output = window_manager.outputs.first();
-    self.send(output);
-
-    var seat_iterator = window_manager.seats.iterator(.forward);
-    while (seat_iterator.next()) |seat| seat.focus(self);
+    self.flink.init();
 
     log.debug("{f} has been created.", .{self});
+    return self;
 }
 
 pub fn destroy(self: *Self) void {
     log.debug("{f} is about to be destroyed.", .{self});
 
-    var fallback: ?*Self = null;
-    if (self.output) |output| {
-        var each_window = self.iterate(.reverse);
-        while (each_window != self.window_manager.windows.last()) : (each_window = each_window.iterate(.reverse)) {
-            if (each_window.output == output) {
-                fallback = each_window;
-                break;
-            }
-        }
-    }
-
+    self.flink.remove();
     self.link.remove();
-    self.send(null);
-
-    if (fallback == null) fallback = self.window_manager.windows.last();
-    var seat_iterator = self.window_manager.seats.iterator(.forward);
-    while (seat_iterator.next()) |seat| {
-        if (seat.focused == self) {
-            seat.focus(fallback);
-        }
-        if (seat.op) |op| {
-            if (op.window == self) {
-                seat.river_seat.opEnd();
-                seat.op = null;
-            }
-        }
-    }
-
     self.river_node.destroy();
     self.river_window.destroy();
-    std.heap.c_allocator.destroy(self);
+    self.allocator.destroy(self);
 }
 
 fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: *Self) void {
@@ -98,42 +69,9 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
         .closed => {
             self.destroy();
         },
-        .app_id => |app| {
-            self.setIcon(app.app_id);
-        },
-        .fullscreen_requested => |requested| {
-            var output: ?*Output = null;
-            if (requested.output) |river_output| {
-                output = @ptrCast(@alignCast(river_output.getUserData().?));
-            }
-            if (output == null) output = self.output;
-            self.send(output);
-            if (output) |nonull_output| {
-                nonull_output.setFullScreen(self);
-            }
-        },
-        .exit_fullscreen_requested => {
-            if (self.output) |output| {
-                if (output.fullscreen == self) output.setFullScreen(null);
-            }
-        },
-        .dimensions => |dimensions| {
-            self.area.w = @intCast(dimensions.width);
-            self.area.h = @intCast(dimensions.height);
-        },
-        .pointer_move_requested => |move| {
-            if (move.seat) |river_seat| {
-                const seat: *Seat = @ptrCast(@alignCast(river_seat.getUserData().?));
-                seat.move(self);
-            }
-        },
-        .pointer_resize_requested => |resize| {
-            if (resize.seat) |river_seat| {
-                const seat: *Seat = @ptrCast(@alignCast(river_seat.getUserData().?));
-                seat.resize(self, resize.edges);
-            }
-        },
-        .dimensions_hint,
+        .fullscreen_requested => {},
+        .exit_fullscreen_requested => {},
+        .pointer_move_requested, .pointer_resize_requested, .dimensions, .dimensions_hint, .app_id => {},
         .title,
         .parent,
         .decoration_hint,
@@ -162,127 +100,69 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
     };
 }
 
+pub fn fiterate(self: *Self, dir: wl.list.Direction) *Self {
+    var flink: *wl.list.Link = &self.flink;
+    return while (true) {
+        flink = switch (dir) {
+            .forward => flink.next.?,
+            .reverse => flink.prev.?,
+        };
+        if (flink == &self.window_manager.fwindows.link) continue;
+        break @fieldParentPtr("flink", flink);
+    };
+}
+
 pub fn manage(self: *Self) void {
     if (self.new) {
+        self.new = false;
         self.river_window.useSsd();
         self.river_window.setTiled(.{ .top = true, .bottom = true, .left = true, .right = true });
-        self.new = false;
     }
 
-    if (self.dirty) {
-        defer log.debug("{f} has updated state.", .{self});
+    if (self.close) {
+        self.close = false;
+        self.river_window.close();
+    }
 
-        self.focused = false;
-        var seat_iterator = self.window_manager.seats.iterator(.forward);
-        while (seat_iterator.next()) |seat| {
-            if (seat.focused == self) {
-                self.focused = true;
-                if (seat.layer_focus == .none) {
-                    seat.river_seat.focusWindow(self.river_window);
-                }
-            }
-        }
+    if (self.border_updated) {
+        self.border_updated = false;
+        self.river_window.setBorders(.{ .top = true, .bottom = true, .left = true, .right = true }, config.border_width, self.border.r, self.border.g, self.border.b, self.border.a);
+    }
 
-        self.sticky = false;
-        if (self.output) |output| {
-            if (self.views & (@as(u10, 1) << (output.view - 1)) != 0) {
-                self.sticky = true;
-            }
-        }
+    if (self.visible_updated) {
+        self.visible_updated = false;
 
-        var color = config.border_normal;
-        if (self.focused) {
-            color = config.border_focused;
-            if (self.sticky) color = config.border_sticky;
-        }
-        self.river_window.setBorders(
-            .{ .top = true, .bottom = true, .left = true, .right = true },
-            config.border_width,
-            color.r,
-            color.g,
-            color.b,
-            color.a,
-        );
-
-        if (self.focused or self.sticky) {
+        if (self.visible) {
             self.river_window.show();
-            self.visible = true;
         } else {
             self.river_window.hide();
-            self.visible = false;
         }
+        log.debug("{f} has been {s}.", .{ self, if (self.visible) "visible" else "not visible" });
+    }
 
-        self.dirty = false;
-    }
-}
+    if (self.floating_updated) {
+        self.floating_updated = false;
 
-pub fn setWeight(self: *Self, weight: u4) void {
-    var new_weight = weight;
-    if (new_weight < 1) {
-        new_weight = 1;
-    } else if (new_weight > 10) {
-        new_weight = 10;
-    }
-    if (new_weight == self.weight) return;
-    self.weight = new_weight;
-    if (self.output) |output| {
-        output.bar.dirty = true;
-        if (self.visible) output.dirty = true;
-    }
-}
-
-pub fn setSticky(self: *Self, sticky: bool) void {
-    if (self.sticky == sticky) return;
-    if (self.output) |output| {
-        self.views ^= @as(u10, 1) << (output.view - 1);
-        self.dirty = true;
-        output.bar.dirty = true;
-        if (!self.focused) output.dirty = true;
-    }
-}
-
-pub fn setFloating(self: *Self, floating: bool) void {
-    if (self.floating == floating) return;
-    self.floating = floating;
-    if (self.output) |output| {
-        if (self.visible) output.dirty = true;
-    }
-}
-
-pub fn send(self: *Self, output: ?*Output) void {
-    if (self.output == output) return;
-    if (self.output) |old_output| {
-        old_output.bar.dirty = true;
-        if (self.visible) old_output.dirty = true;
-    }
-    self.output = output;
-    if (self.output) |new_output| {
-        new_output.bar.dirty = true;
-        if (self.visible) new_output.dirty = true;
-    }
-}
-
-pub fn swap(self: *Self, another: *Self) void {
-    if (self == another) return;
-    if (self.output != another.output) return;
-    self.link.swapWith(&another.link);
-    if (self.output) |output| {
-        output.bar.dirty = true;
-        if (self.visible or another.visible) output.dirty = true;
-    }
-}
-
-fn setIcon(self: *Self, id: ?[*:0]const u8) void {
-    self.icon = config.app_icon_fallback;
-    if (id) |app_id| {
-        for (&config.app_icons) |*app_icon| {
-            if (std.mem.orderZ(u8, app_icon.id, app_id) == .eq) {
-                self.icon = app_icon.icon;
-                break;
-            }
+        if (self.floating) {
+            self.river_node.placeTop();
+        } else {
+            self.river_node.placeBottom();
         }
+        log.debug("{f} has been {s}.", .{ self, if (self.floating) "floating" else "not floating" });
     }
-    if (self.output) |output| output.bar.dirty = true;
+
+    if (self.fullscreen_updated) {
+        self.fullscreen_updated = false;
+
+        if (self.fullscreen) {
+            self.river_window.informFullscreen();
+            self.river_window.fullscreen(self.placed.?.river_output);
+        } else {
+            self.river_window.informNotFullscreen();
+            self.river_window.exitFullscreen();
+        }
+        log.debug("{f} has been {s}.", .{ self, if (self.fullscreen) "fullscreen" else "not fullscreen" });
+    }
 }
 
 pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {

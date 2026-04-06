@@ -1,10 +1,4 @@
 const std = @import("std");
-const wayland = @import("wayland");
-const wl = wayland.client.wl;
-const river = wayland.client.river;
-const Modifiers = river.SeatV1.Modifiers;
-const xkbcommon = @import("xkbcommon");
-const Keysym = xkbcommon.Keysym;
 const fcft = @import("fcft");
 const pixman = @import("pixman");
 
@@ -37,64 +31,39 @@ pub fn getPixmanColor(u: u32) pixman.Color {
     };
 }
 
-pub const Button = enum(u32) {
-    left = 0x110,
-    right = 0x111,
-};
-
-pub const Trigger = union(enum) {
-    keysym: Keysym,
-    button: Button,
-};
-
-pub const Action = union(enum) {
-    toggle_passthrough,
-    spawn: []const []const u8,
-    toggle_window_sticky,
-    toggle_window_fullscreen,
-    iterate_window_weight: wl.list.Direction,
-    iterate_window_focus: wl.list.Direction,
-    iterate_sticky_window_focus: wl.list.Direction,
-    iterate_window_order: wl.list.Direction,
-    iterate_output_view: wl.list.Direction,
-    iterate_output_focus: wl.list.Direction,
-    iterate_window_output: wl.list.Direction,
-    set_window_focus: i32,
-    set_window_weight: i32,
-    set_output_view: u4,
-    close_window,
-    enable_window_floating,
-    disable_window_floating,
-    quit,
-};
-
-pub const Binding = struct {
-    modifiers: Modifiers,
-    trigger: Trigger,
-    action: Action,
-};
-
 pub const Rect = struct {
     x: i32,
     y: i32,
-    w: u31,
-    h: u31,
-};
+    w: i32,
+    h: i32,
 
-pub fn hit(x: i32, y: i32, rect: ?Rect) bool {
-    if (rect) |nonull_rect| {
-        if (x >= nonull_rect.x and y >= nonull_rect.y and x <= nonull_rect.x + nonull_rect.w and y <= nonull_rect.y + nonull_rect.h) {
+    pub fn hit(rect: *const Rect, x: i32, y: i32) bool {
+        if (x >= rect.x and y >= rect.y and x <= rect.x + rect.w and y <= rect.y + rect.h) {
             return true;
         } else {
             return false;
         }
-    } else {
-        return false;
     }
-}
 
-pub fn spawn(cmd: []const []const u8) void {
-    var child = std.process.Child.init(cmd, std.heap.c_allocator);
+    pub fn overlay(rect1: *const Rect, rect2: *const Rect) bool {
+        if (rect1.x >= rect2.x + rect2.w) return false;
+        if (rect2.x >= rect1.x + rect1.w) return false;
+        if (rect1.y >= rect2.y + rect2.h) return false;
+        if (rect2.y >= rect1.y + rect1.h) return false;
+        return true;
+    }
+
+    pub fn contain(rect1: *const Rect, rect2: *const Rect) bool {
+        if (rect1.x > rect2.x) return false;
+        if (rect1.x + rect1.w < rect2.x + rect2.w) return false;
+        if (rect1.y > rect2.y) return false;
+        if (rect1.y + rect1.h < rect2.y + rect2.h) return false;
+        return true;
+    }
+};
+
+pub fn spawn(cmd: []const []const u8, allocator: std.mem.Allocator) void {
+    var child = std.process.Child.init(cmd, allocator);
     child.spawn() catch {};
 }
 
