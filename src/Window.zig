@@ -83,8 +83,17 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
             }
             self.destroy();
         },
-        .fullscreen_requested => {},
-        .exit_fullscreen_requested => {},
+        .fullscreen_requested => |data| {
+            var output: ?*Output = self.placed;
+            if (data.output) |river_output| {
+                output = @ptrCast(@alignCast(river_output.getUserData().?));
+            }
+            self.place(output);
+            if (!self.fullscreen) self.toggleFullscreen();
+        },
+        .exit_fullscreen_requested => {
+            if (self.fullscreen) self.toggleFullscreen();
+        },
         .app_id => |data| {
             self.setIcon(data.app_id);
         },
