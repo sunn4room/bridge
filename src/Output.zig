@@ -163,6 +163,7 @@ pub fn changeView(self: *Self, view: u4) ?*Window {
 
     if (view != self.view) {
         self.view = view;
+        self.bar.dirty = true;
 
         var window_iterator = self.window_manager.windows.iterator(.forward);
         while (window_iterator.next()) |window| {

@@ -185,16 +185,16 @@ fn river_layer_shell_seat_listener(_: *river.LayerShellSeatV1, event: river.Laye
     log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .focus_exclusive => {
-            self.focus(null);
             self.layer_focus = .exclusive;
         },
         .focus_non_exclusive => {
-            self.focus(null);
             self.layer_focus = .non_exclusive;
         },
         .focus_none => {
-            self.layer_focus = .none;
-            self.focus(self.window_manager.fwindows.last());
+            if (self.layer_focus != .none) {
+                self.layer_focus = .none;
+                self.focused_updated = true;
+            }
         },
     }
 }
@@ -203,15 +203,18 @@ pub fn manage(self: *Self) void {
     var binding_iterator = self.bindings.iterator(.forward);
     while (binding_iterator.next()) |binding| binding.manage();
 
-    if (self.focused_updated) {
-        self.focused_updated = false;
+    if (self.layer_focus != .exclusive) {
+        if (self.focused_updated) {
+            self.focused_updated = false;
+            self.layer_focus = .none;
 
-        if (self.focused) |window| {
-            self.river_seat.focusWindow(window.river_window);
-            log.debug("{f} has focused on {f}.", .{ self, window });
-        } else {
-            self.river_seat.clearFocus();
-            log.debug("{f} has cleared focus.", .{self});
+            if (self.focused) |window| {
+                self.river_seat.focusWindow(window.river_window);
+                log.debug("{f} has focused on {f}.", .{ self, window });
+            } else {
+                self.river_seat.clearFocus();
+                log.debug("{f} has cleared focus.", .{self});
+            }
         }
     }
 
@@ -308,15 +311,18 @@ pub fn focus(self: *Self, original_window: ?*Window) void {
         }
     }
 
-    if (self.focused == window) return;
-
-    switch (self.layer_focus) {
-        .exclusive => return,
-        .non_exclusive => if (window != null) {
-            self.layer_focus = .none;
-        },
-        .none => {},
+    if (self.focused == window) {
+        if (self.layer_focus != .none) self.focused_updated = true;
+        return;
     }
+
+    // switch (self.layer_focus) {
+    //     .exclusive => return,
+    //     .non_exclusive => if (window != null) {
+    //         self.layer_focus = .none;
+    //     },
+    //     .none => {},
+    // }
 
     self.cancel(null);
 
@@ -331,7 +337,7 @@ pub fn move(self: *Self, window: *Window) void {
     self.focus(window);
 
     if (self.focused != window) return;
-    window.setFloating(true);
+    window.switchFloating(true);
 
     self.operation = .{
         .window = window,
@@ -350,7 +356,7 @@ pub fn resize(self: *Self, window: *Window, edges: river.WindowV1.Edges) void {
     self.focus(window);
 
     if (self.focused != window) return;
-    window.setFloating(true);
+    window.switchFloating(true);
 
     self.operation = .{
         .window = window,

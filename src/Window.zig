@@ -89,13 +89,13 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
                 output = @ptrCast(@alignCast(river_output.getUserData().?));
             }
             self.place(output);
-            if (!self.fullscreen) self.toggleFullscreen();
+            self.switchFullscreen(true);
         },
         .exit_fullscreen_requested => {
-            if (self.fullscreen) self.toggleFullscreen();
+            self.switchFullscreen(false);
         },
         .app_id => |data| {
-            self.setIcon(data.app_id);
+            self.changeIcon(data.app_id);
         },
         .pointer_move_requested,
         .pointer_resize_requested,
@@ -198,6 +198,9 @@ pub fn manage(self: *Self) void {
 
 pub fn place(self: *Self, output: ?*Output) void {
     if (output != self.placed) {
+        self.switchFloating(false);
+        self.switchFullscreen(false);
+
         if (self.placed) |old_output| {
             old_output.dirty = true;
             old_output.bar.dirty = true;
@@ -232,8 +235,10 @@ pub fn focus(self: *Self, focused: bool) void {
     }
 }
 
-pub fn toggleSticky(self: *Self) void {
+pub fn switchSticky(self: *Self, sticky_or_null: ?bool) void {
     if (self.placed) |output| {
+        const sticky = if (sticky_or_null) |nonull_sticky| nonull_sticky else !self.sticky;
+        if (self.sticky == sticky) return;
         self.views ^= @as(u10, 1) << (output.view - 1);
         self.update_sticky();
     }
@@ -291,28 +296,47 @@ pub fn changeWeight(self: *Self, weight: u4) void {
     }
 }
 
-pub fn toggleFloating(self: *Self) void {
-    self.floating = !self.floating;
-    self.floating_updated = true;
+pub fn switchFullscreen(self: *Self, fullscreen_or_null: ?bool) void {
+    const fullscreen = if (fullscreen_or_null) |nonull_fullscreen| nonull_fullscreen else !self.fullscreen;
+    if (fullscreen == self.fullscreen) return;
+
+    self.fullscreen = fullscreen;
+    self.fullscreen_updated = true;
+
     if (self.placed) |output| {
-        if (self.visible) output.dirty = true;
+        if (self.fullscreen) {
+            if (output.fullscreen) |old_window| {
+                old_window.switchFullscreen(false);
+            }
+            output.fullscreen = self;
+        } else {
+            output.fullscreen = null;
+        }
     }
 }
 
-pub fn toggleFullscreen(self: *Self) void {
-    if (self.placed) |output| {
-        if (self.fullscreen) {
-            self.fullscreen = false;
-            self.fullscreen_updated = true;
-            output.fullscreen = null;
-        } else {
-            self.fullscreen = true;
-            self.fullscreen_updated = true;
-            if (output.fullscreen) |old_window| {
-                old_window.toggleFloating();
+pub fn switchFloating(self: *Self, floating_or_null: ?bool) void {
+    const floating = if (floating_or_null) |nonull_floating| nonull_floating else !self.floating;
+    if (floating == self.floating) return;
+
+    self.floating = floating;
+    self.floating_updated = true;
+    if (self.placed) |output| output.dirty = true;
+}
+
+pub fn changeIcon(self: *Self, id: ?[*:0]const u8) void {
+    var icon = config.app_icon_fallback;
+    if (id) |app_id| {
+        for (&config.app_icons) |*app_icon| {
+            if (std.mem.orderZ(u8, app_icon.id, app_id) == .eq) {
+                icon = app_icon.icon;
+                break;
             }
-            output.fullscreen = self;
         }
+    }
+    if (icon != self.icon) {
+        self.icon = icon;
+        if (self.placed) |output| output.bar.dirty = true;
     }
 }
 
@@ -327,30 +351,6 @@ pub fn swap(self: *Self, other: *Self) void {
     if (other.placed) |output| {
         output.dirty = true;
         output.bar.dirty = true;
-    }
-}
-
-pub fn setFloating(self: *Self, floating: bool) void {
-    if (floating == self.floating) return;
-
-    self.floating = floating;
-    self.floating_updated = true;
-    if (self.placed) |output| output.dirty = true;
-}
-
-pub fn setIcon(self: *Self, id: ?[*:0]const u8) void {
-    var icon = config.app_icon_fallback;
-    if (id) |app_id| {
-        for (&config.app_icons) |*app_icon| {
-            if (std.mem.orderZ(u8, app_icon.id, app_id) == .eq) {
-                icon = app_icon.icon;
-                break;
-            }
-        }
-    }
-    if (icon != self.icon) {
-        self.icon = icon;
-        if (self.placed) |output| output.bar.dirty = true;
     }
 }
 

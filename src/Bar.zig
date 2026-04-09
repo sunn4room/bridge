@@ -141,7 +141,7 @@ pub fn manage(self: *Self) void {
                 if (has_focused) {
                     if (has_window) {
                         views_position = buffer.stamp(icon, views_position, &config.bar_selection, &config.bar_foreground);
-                    } else {
+                    } else if (weights_width != 0) {
                         views_position = buffer.stamp(icon, views_position, &config.bar_selection, &config.bar_theme);
                     }
                 } else {

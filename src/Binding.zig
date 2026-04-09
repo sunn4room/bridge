@@ -268,10 +268,10 @@ fn execute(self: *Self) void {
             if (seat.focused) |window| window.close = true;
         },
         .toggle_window_sticky => {
-            if (seat.focused) |window| window.toggleSticky();
+            if (seat.focused) |window| window.switchSticky(null);
         },
         .toggle_window_fullscreen => {
-            if (seat.focused) |window| window.toggleFullscreen();
+            if (seat.focused) |window| window.switchFullscreen(null);
         },
         .enable_window_floating => {
             if (seat.hovered) |window| {
@@ -292,7 +292,7 @@ fn execute(self: *Self) void {
         .disable_window_floating => {
             if (seat.hovered) |window| {
                 seat.focus(window);
-                window.setFloating(false);
+                window.switchFloating(false);
             }
         },
         .quit => {
