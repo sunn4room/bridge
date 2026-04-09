@@ -67,10 +67,11 @@ pub fn spawn(cmd: []const []const u8, allocator: std.mem.Allocator) void {
     child.spawn() catch {};
 }
 
-pub fn getFont(dpi: u32) *fcft.Font {
+pub fn getFont(dpi: i32) *fcft.Font {
     var names: [1][*:0]const u8 = .{config.font_name};
     const names_len: usize = 1;
     if (dpi > 999) unreachable;
+    if (dpi < 0) unreachable;
     var attributes = [_]u8{0} ** 8;
     return fcft.Font.fromName(names[0..names_len], std.fmt.bufPrintZ(&attributes, "dpi={}", .{dpi}) catch unreachable) catch unreachable;
 }

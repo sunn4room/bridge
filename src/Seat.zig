@@ -117,6 +117,7 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
     log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .removed => {
+            self.focus(null);
             self.destroy();
         },
         .pointer_position => |data| {
@@ -129,7 +130,32 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
                 self.focus(window);
             }
         },
-        .shell_surface_interaction => {},
+        .shell_surface_interaction => {
+            var window_iterator = self.window_manager.windows.iterator(.forward);
+            while (window_iterator.next()) |window| {
+                for (&window.buttons) |*button| {
+                    if (button.hit(self.x, self.y)) {
+                        self.focus(window);
+                        break;
+                    }
+                }
+            } else {
+                var output_iterator = self.window_manager.outputs.iterator(.forward);
+                while (output_iterator.next()) |output| {
+                    var counter: u4 = 0;
+                    for (&output.buttons) |*button| {
+                        counter += 1;
+                        if (button.hit(self.x, self.y)) {
+                            const first_sticky_window_or_null = output.changeView(counter);
+                            if (first_sticky_window_or_null) |first_sticky_window| {
+                                self.focus(first_sticky_window);
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        },
         .pointer_enter => |data| {
             if (data.window) |river_window| {
                 self.hovered = @ptrCast(@alignCast(river_window.getUserData().?));
@@ -142,6 +168,7 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
             if (self.operation) |*operation| {
                 operation.dx = data.dx;
                 operation.dy = data.dy;
+                self.operation_updated = true;
             } else unreachable;
         },
         .op_release => {
@@ -223,13 +250,12 @@ pub fn manage(self: *Self) void {
                 .running => {
                     const window = operation.window.?;
                     const output = window.placed.?;
-                    const output_area = output.area.?;
-                    var area: Rect = window.area.?;
+                    var area: Rect = window.area;
                     switch (operation.data) {
                         .move => |data| {
                             area.x = data.x + operation.dx;
                             area.y = data.y + operation.dy;
-                            if (!output_area.contain(&area)) return;
+                            if (!output.area.contain(&area)) return;
                             window.river_node.setPosition(area.x, area.y);
                             window.area = area;
                         },
@@ -250,7 +276,7 @@ pub fn manage(self: *Self) void {
                             } else if (data.edges.bottom) {
                                 area.h = data.h + operation.dy;
                             }
-                            if (!output_area.contain(&area)) return;
+                            if (!output.area.contain(&area)) return;
                             window.river_node.setPosition(area.x, area.y);
                             window.river_window.proposeDimensions(area.w, area.h);
                             window.area = area;
@@ -294,10 +320,10 @@ pub fn focus(self: *Self, original_window: ?*Window) void {
 
     self.cancel(null);
 
-    // if (self.focused) |old_window| old_window.changeFocus(-1);
+    if (self.focused) |old_window| old_window.focus(false);
     self.focused = window;
     self.focused_updated = true;
-    // if (self.focused) |new_window| new_window.changeFocus(1);
+    if (self.focused) |new_window| new_window.focus(true);
 }
 
 pub fn move(self: *Self, window: *Window) void {
@@ -311,11 +337,12 @@ pub fn move(self: *Self, window: *Window) void {
         .window = window,
         .data = .{
             .move = .{
-                .x = window.area.?.x,
-                .y = window.area.?.y,
+                .x = window.area.x,
+                .y = window.area.y,
             },
         },
     };
+    self.operation_updated = true;
 }
 
 pub fn resize(self: *Self, window: *Window, edges: river.WindowV1.Edges) void {
@@ -330,13 +357,14 @@ pub fn resize(self: *Self, window: *Window, edges: river.WindowV1.Edges) void {
         .data = .{
             .resize = .{
                 .edges = edges,
-                .x = window.area.?.x,
-                .y = window.area.?.y,
-                .w = window.area.?.w,
-                .h = window.area.?.h,
+                .x = window.area.x,
+                .y = window.area.y,
+                .w = window.area.w,
+                .h = window.area.h,
             },
         },
     };
+    self.operation_updated = true;
 }
 
 pub fn cancel(self: *Self, window_or_null: ?*Window) void {
@@ -349,6 +377,7 @@ pub fn cancel(self: *Self, window_or_null: ?*Window) void {
             }
         }
         operation.state = .stopped;
+        self.operation_updated = true;
     }
 }
 

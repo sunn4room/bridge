@@ -10,6 +10,7 @@ const Rect = util.Rect;
 const WindowManager = @import("WindowManager.zig");
 const Seat = @import("Seat.zig");
 const Window = @import("Window.zig");
+const Bar = @import("Bar.zig");
 
 const Self = @This();
 
@@ -18,11 +19,13 @@ window_manager: *WindowManager,
 river_output: *river.OutputV1,
 river_layer_shell_output: *river.LayerShellOutputV1,
 link: wl.list.Link = undefined,
-area: ?Rect = null,
+new: bool = true,
+area: Rect = undefined,
 view: u4 = 1,
-buttons: [10]?Rect = .{null} ** 10,
+buttons: [10]Rect = undefined,
 fullscreen: ?*Window = null,
-layout_updated: bool = false,
+dirty: bool = false,
+bar: *Bar = undefined,
 
 pub fn create(window_manager: *WindowManager, river_output: *river.OutputV1) *Self {
     const self = window_manager.allocator.create(Self) catch unreachable;
@@ -37,6 +40,8 @@ pub fn create(window_manager: *WindowManager, river_output: *river.OutputV1) *Se
     self.river_layer_shell_output.setListener(*Self, river_layer_shell_output_listener, self);
     self.link.init();
 
+    self.bar = Bar.create(self);
+
     log.debug("{f} has been created.", .{self});
     return self;
 }
@@ -44,6 +49,7 @@ pub fn create(window_manager: *WindowManager, river_output: *river.OutputV1) *Se
 pub fn destroy(self: *Self) void {
     log.debug("{f} is about to be destroyed.", .{self});
 
+    self.bar.destroy();
     self.link.remove();
     self.river_output.destroy();
     self.river_layer_shell_output.destroy();
@@ -54,6 +60,13 @@ fn river_output_listener(_: *river.OutputV1, event: river.OutputV1.Event, self: 
     log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .removed => {
+            var fallback: ?*Self = null;
+            const prev_output = self.iterate(.reverse);
+            if (prev_output != self) fallback = prev_output;
+            var window_iterator = self.window_manager.windows.iterator(.forward);
+            while (window_iterator.next()) |window| {
+                if (window.placed == self) window.place(fallback);
+            }
             self.destroy();
         },
         .wl_output,
@@ -75,7 +88,9 @@ fn river_layer_shell_output_listener(_: *river.LayerShellOutputV1, event: river.
                 .w = area.width,
                 .h = area.height,
             };
-            self.layout_updated = true;
+            self.new = false;
+            self.dirty = true;
+            self.bar.dirty = true;
         },
     }
 }
@@ -93,52 +108,73 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
 }
 
 pub fn manage(self: *Self) void {
-    if (self.area) |area| {
-        if (self.layout_updated) {
-            self.layout_updated = false;
+    if (self.new) return;
 
-            var total_weight: i32 = 0;
-            var window_iterator = self.window_manager.windows.iterator(.forward);
+    self.bar.manage();
+
+    if (self.dirty) {
+        self.dirty = false;
+
+        var total_weight: i32 = 0;
+        var window_iterator = self.window_manager.windows.iterator(.forward);
+        while (window_iterator.next()) |window| {
+            if (window.placed == self and window.visible and !window.floating) {
+                total_weight += window.weight;
+            }
+        }
+
+        if (total_weight != 0) {
+            var occupied_weight: i32 = 0;
+            window_iterator = self.window_manager.windows.iterator(.forward);
             while (window_iterator.next()) |window| {
                 if (window.placed == self and window.visible and !window.floating) {
-                    total_weight += window.weight;
-                }
-            }
-
-            if (total_weight != 0) {
-                var occupied_weight: i32 = 0;
-                window_iterator = self.window_manager.windows.iterator(.forward);
-                while (window_iterator.next()) |window| {
-                    if (window.placed == self and window.visible and !window.floating) {
-                        var window_area: Rect = undefined;
-                        const gap: i32 = config.layout_gap;
-                        const total_width: i32 = area.w - gap;
-                        const occupied_width: i32 = @divFloor(total_width * occupied_weight, total_weight);
-                        const window_width: i32 = @divFloor(total_width * window.weight, total_weight);
-                        window_area.x = gap + occupied_width + config.border_width;
-                        window_area.y = self.window_manager.bar_height + gap + config.border_width;
-                        window_area.w = window_width - gap - 2 * config.border_width;
-                        window_area.h = area.h - self.window_manager.bar_height - 2 * gap - 2 * config.border_width;
-                        window.river_node.setPosition(window_area.x, window_area.y);
-                        window.river_window.proposeDimensions(window_area.w, window_area.h);
-                        window.area = window_area;
-                        log.debug(
-                            "{f} layout {f}: {}, {}, {}, {}",
-                            .{
-                                self,
-                                window,
-                                window_area.x,
-                                window_area.y,
-                                window_area.w,
-                                window_area.h,
-                            },
-                        );
-                        occupied_weight += window.weight;
-                    }
+                    var area: Rect = undefined;
+                    const gap: i32 = config.layout_gap;
+                    const total_width: i32 = self.area.w - gap;
+                    const occupied_width: i32 = @divFloor(total_width * occupied_weight, total_weight);
+                    const window_width: i32 = @divFloor(total_width * window.weight, total_weight);
+                    area.x = gap + occupied_width + config.border_width;
+                    area.y = self.window_manager.bar_height + gap + config.border_width;
+                    area.w = window_width - gap - 2 * config.border_width;
+                    area.h = self.area.h - self.window_manager.bar_height - 2 * gap - 2 * config.border_width;
+                    window.river_node.setPosition(area.x, area.y);
+                    window.river_window.proposeDimensions(area.w, area.h);
+                    window.area = area;
+                    log.debug(
+                        "{f} layout {f}: {}, {}, {}, {}",
+                        .{
+                            self,
+                            window,
+                            area.x,
+                            area.y,
+                            area.w,
+                            area.h,
+                        },
+                    );
+                    occupied_weight += window.weight;
                 }
             }
         }
     }
+}
+
+pub fn changeView(self: *Self, view: u4) ?*Window {
+    var first_sticky_window: ?*Window = null;
+
+    if (view != self.view) {
+        self.view = view;
+
+        var window_iterator = self.window_manager.windows.iterator(.forward);
+        while (window_iterator.next()) |window| {
+            if (window.placed == self) {
+                window.update_sticky();
+                if (window.sticky and first_sticky_window == null) {
+                    first_sticky_window = window;
+                }
+            }
+        }
+    }
+    return first_sticky_window;
 }
 
 pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {

@@ -176,18 +176,31 @@ fn river_window_manager_listener(_: *river.WindowManagerV1, event: river.WindowM
             const seat = Seat.create(self, river_seat);
 
             self.seats.append(seat);
+            seat.focus(self.fwindows.last());
         },
         .window => |data| {
             const river_window = data.id;
             const window = Window.create(self, river_window);
 
             self.fwindows.append(window);
+            const last_focused_window = window.fiterate(.reverse);
+            if (last_focused_window == window) {
+                self.windows.append(window);
+                window.place(self.outputs.first());
+            } else {
+                last_focused_window.link.insert(&window.link);
+                window.place(last_focused_window.placed);
+            }
+            var seat_iterator = self.seats.iterator(.forward);
+            while (seat_iterator.next()) |seat| seat.focus(window);
         },
         .output => |data| {
             const river_output = data.id;
             const output = Output.create(self, river_output);
 
             self.outputs.append(output);
+            var window_iterator = self.windows.iterator(.forward);
+            while (window_iterator.next()) |window| if (window.placed == null) window.place(output);
         },
         .manage_start => {
             var seat_iterator = self.seats.iterator(.forward);
