@@ -316,14 +316,6 @@ pub fn focus(self: *Self, original_window: ?*Window) void {
         return;
     }
 
-    // switch (self.layer_focus) {
-    //     .exclusive => return,
-    //     .non_exclusive => if (window != null) {
-    //         self.layer_focus = .none;
-    //     },
-    //     .none => {},
-    // }
-
     self.cancel(null);
 
     if (self.focused) |old_window| old_window.focus(false);

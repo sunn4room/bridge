@@ -5,7 +5,7 @@ const Modifiers = wayland.client.river.SeatV1.Modifiers;
 const util = @import("util.zig");
 const Binding = @import("Binding.zig");
 
-pub const color_background: u32 = 0x282A36FF;
+pub const color_background: u32 = 0x282A36DD;
 pub const color_foreground: u32 = 0xF8F8F2FF;
 pub const color_selection: u32 = 0x44475AFF;
 pub const color_theme: u32 = 0x8BE9FDFF;
@@ -30,13 +30,24 @@ pub const app_icons = [_]struct { id: [*:0]const u8, icon: [*:0]const u8 }{
     .{ .icon = "    ", .id = "chrome" },
     .{ .icon = "    ", .id = "chromium" },
     .{ .icon = "    ", .id = "microsoft-edge" },
+    .{ .icon = "    ", .id = "code" },
+    .{ .icon = "    ", .id = "codium" },
+    .{ .icon = "    ", .id = "mpv" },
     .{ .icon = "    ", .id = "alacritty" },
     .{ .icon = "    ", .id = "kitty" },
     .{ .icon = "    ", .id = "ghostty" },
     .{ .icon = "    ", .id = "wezterm" },
     .{ .icon = "    ", .id = "foot" },
     .{ .icon = "    ", .id = "footclient" },
-    .{ .icon = "    ", .id = "mpv" },
+    .{ .icon = "    ", .id = "nvim" },
+    .{ .icon = "    ", .id = "htop" },
+    .{ .icon = "    ", .id = "btop" },
+    .{ .icon = "    ", .id = "lf" },
+    .{ .icon = "    ", .id = "yazi" },
+    .{ .icon = "    ", .id = "ranger" },
+    .{ .icon = "  󰊢  ", .id = "lazygit" },
+    .{ .icon = "  󰊢  ", .id = "gitui" },
+    .{ .icon = "    ", .id = "newsboat" },
 };
 
 pub const startup_cmds = [_][]const []const u8{
@@ -103,5 +114,6 @@ pub const mappers = [_]Binding.Mapper{
     .{ .modifiers = mod______, .trigger = .{ .keysym = .a }, .action = .toggle_window_fullscreen },
     .{ .modifiers = mod______, .trigger = .{ .button = .left }, .action = .enable_window_floating },
     .{ .modifiers = mod______, .trigger = .{ .button = .right }, .action = .disable_window_floating },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .BackSpace }, .action = .refresh },
     .{ .modifiers = mod_shift, .trigger = .{ .keysym = .Escape }, .action = .quit },
 };

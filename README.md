@@ -10,7 +10,6 @@ A horizontal-tiling window manager based on [river](https://codeberg.org/river/r
 - Focused or sticky windows are tiled horizontally on the screen according to their weight. Other windows is hidden.
 - Each view contains a group of sticky status.
 - Each screen has 10 views.
-- Switch window floating status using the mouse.
 
 ![bridge screenshot](screenshot.png)
 
@@ -23,7 +22,6 @@ A horizontal-tiling window manager based on [river](https://codeberg.org/river/r
 ## Why not Bridge?
 
 - Bridge is customized through editing its source code.
-- Bridge does not support Animations.
 - Bridge built-in bar only displays icons, not other information such as the time and date.
 - Bridge becomes very ugly when tiling 3+ windows.
 - Bridge is not good at managing 10+ windows.

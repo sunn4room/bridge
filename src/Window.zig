@@ -97,8 +97,18 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
         .app_id => |data| {
             self.changeIcon(data.app_id);
         },
-        .pointer_move_requested,
-        .pointer_resize_requested,
+        .pointer_move_requested => |data| {
+            if (data.seat) |river_seat| {
+                const seat: *Seat = @ptrCast(@alignCast(river_seat.getUserData().?));
+                seat.move(self);
+            }
+        },
+        .pointer_resize_requested => |data| {
+            if (data.seat) |river_seat| {
+                const seat: *Seat = @ptrCast(@alignCast(river_seat.getUserData().?));
+                seat.resize(self, data.edges);
+            }
+        },
         .dimensions,
         .dimensions_hint,
         .title,
