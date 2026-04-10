@@ -96,6 +96,7 @@ pub fn create(window_manager: *WindowManager, river_seat: *river.SeatV1) *Self {
     for (&config.mappers) |*mapper| {
         const binding = Binding.create(self, mapper);
         self.bindings.append(binding);
+        binding.switchEnabled(true);
     }
 
     log.debug("{f} has been created.", .{self});

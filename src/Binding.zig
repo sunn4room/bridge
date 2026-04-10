@@ -51,8 +51,8 @@ river_binding: union(enum) {
     pointer: *river.PointerBindingV1,
 } = undefined,
 link: wl.list.Link = undefined,
-enabled_updated: bool = true,
-enabled: bool = true,
+enabled_updated: bool = false,
+enabled: bool = false,
 
 pub fn create(seat: *Seat, mapper: *const Mapper) *Self {
     const self = seat.allocator.create(Self) catch unreachable;
@@ -134,11 +134,11 @@ pub fn manage(self: *Self) void {
     }
 }
 
-pub fn toggle(self: *Self) void {
-    if (self.mapper.action != .toggle_passthrough) {
-        self.enabled = !self.enabled;
-        self.enabled_updated = true;
-    }
+pub fn switchEnabled(self: *Self, enabled_or_null: ?bool) void {
+    const enabled = if (enabled_or_null) |nonull_enabled| nonull_enabled else !self.enabled;
+    if (enabled == self.enabled) return;
+    self.enabled = enabled;
+    self.enabled_updated = true;
 }
 
 fn execute(self: *Self) void {
@@ -147,7 +147,9 @@ fn execute(self: *Self) void {
     switch (self.mapper.action) {
         .toggle_passthrough => {
             var binding_iterator = seat.bindings.iterator(.forward);
-            while (binding_iterator.next()) |binding| binding.toggle();
+            while (binding_iterator.next()) |binding| {
+                if (binding.mapper.action != .toggle_passthrough) binding.switchEnabled(null);
+            }
         },
         .spawn => |cmd| {
             util.spawn(cmd, self.allocator);

@@ -217,10 +217,20 @@ fn river_window_manager_listener(_: *river.WindowManagerV1, event: river.WindowM
             self.river_window_manager.renderFinish();
             log.debug("{f} has finished render sequence.\n", .{self});
         },
-        .session_locked,
-        .session_unlocked,
-        => {
-            log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
+        .session_locked => {
+            var seat_iterator = self.seats.iterator(.forward);
+            while (seat_iterator.next()) |seat| {
+                var binding_iterator = seat.bindings.iterator(.forward);
+                while (binding_iterator.next()) |binding| binding.switchEnabled(false);
+            }
+        },
+        .session_unlocked => {
+            var seat_iterator = self.seats.iterator(.forward);
+            while (seat_iterator.next()) |seat| {
+                seat.focused_updated = true;
+                var binding_iterator = seat.bindings.iterator(.forward);
+                while (binding_iterator.next()) |binding| binding.switchEnabled(true);
+            }
         },
     }
 }
