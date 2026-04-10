@@ -210,6 +210,9 @@ pub fn manage(self: *Self) void {
 
             if (self.focused) |window| {
                 self.river_seat.focusWindow(window.river_window);
+                if (window.placed) |output| {
+                    output.river_layer_shell_output.setDefault();
+                }
                 log.debug("{f} has focused on {f}.", .{ self, window });
             } else {
                 self.river_seat.clearFocus();
