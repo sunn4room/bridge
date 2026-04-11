@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.svg" width="150em">
+  <img src="./logo.svg" width="150em">
 </div>
 
 ## What is Bridge?
@@ -11,7 +11,7 @@ A horizontal-tiling window manager based on [river](https://codeberg.org/river/r
 - Each view contains a group of sticky status.
 - Each screen has 10 views.
 
-![bridge screenshot](screenshot.png)
+![bridge screenshot](./screenshot.png)
 
 ## Why Bridge?
 
