@@ -56,7 +56,7 @@ pub const startup_cmds = [_][]const []const u8{
     &.{ "sh", "-c", "mako" },
     &.{ "sh", "-c", "swaybg -m fill -i ~/.config/wallpaper" },
     &.{ "sh", "-c", "wl-clip-persist --clipboard regular" },
-    &.{ "sh", "-c", "mkfifo $XDG_RUNTIME_DIR/wob.sock && tail -f $XDG_RUNTIME_DIR/wob.sock | wob" },
+    &.{ "sh", "-c", "rm -f $XDG_RUNTIME_DIR/wob.sock && mkfifo $XDG_RUNTIME_DIR/wob.sock && tail -f $XDG_RUNTIME_DIR/wob.sock | wob" },
 };
 
 pub const terminal = "footclient";
