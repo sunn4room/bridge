@@ -4,7 +4,7 @@
 
 ## What is Bridge?
 
-A horizontal-tiling window manager based on [river](https://codeberg.org/river/river/) wayland compositor.
+A horizontal-tiling window manager based on [river](https://codeberg.org/river/river/) wayland compositor. Under a bridge, there are bridge openings of different sizes arranged horizontally. This window manager also has windows of different widths tiled horizontally.
 
 - Each window has a weight from 1 to 10.
 - Focused or sticky windows are tiled horizontally on the screen according to their weight. Other windows is hidden.
