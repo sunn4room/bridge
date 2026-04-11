@@ -187,6 +187,12 @@ pub fn manage(self: *Self) void {
             }
         }
 
+        if (weights_width == 0) {
+            const icon_width = self.getIcon(config.placeholder).width;
+            const icon_position: i32 = @divFloor(width - icon_width, 2);
+            _ = buffer.stamp(config.placeholder, icon_position, null, &config.bar_theme);
+        }
+
         self.wp_viewport.setDestination(self.output.area.w, self.output.window_manager.bar_height);
         self.wl_surface.setBufferScale(1);
         self.wl_surface.attach(buffer.wl_buffer, 0, 0);
