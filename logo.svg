@@ -1,10 +1,6 @@
-<svg width="120" height="120" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    @media (prefers-color-scheme: dark) {
-      path { fill: #fff; }
-    }
-  </style>
-  <path d="M 10 10 l 100 0 l 0 65 a 150 150 0 0 0 -100 0 Z"/>
-  <path d="M 10 110 a 21 21 0 0 1 40 -3 l -5 0 l 0 3 Z"/>
-  <path d="M 110 110 a 21 21 0 0 0 -40 -3 l 5 0 l 0 3 Z"/>
+<svg width="104" height="104" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%" height="100%" fill="black" />
+  <path d="M 2 2 l 100 0 l 0 65 a 150 150 0 0 0 -100 0 Z" fill="white"/>
+  <path d="M 2 102 a 21 21 0 0 1 40 -3 l -5 0 l 0 3 Z" fill="white"/>
+  <path d="M 102 102 a 21 21 0 0 0 -40 -3 l 5 0 l 0 3 Z" fill="white"/>
 </svg>
