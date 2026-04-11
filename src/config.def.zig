@@ -22,6 +22,7 @@ pub const border_focused = util.getColor(color_theme);
 pub const border_sticky = util.getColor(color_foreground);
 
 pub const font_name: [*:0]const u8 = "sans-serif:size=14";
+pub const placeholder: [*:0]const u8 = "😎  HAVE A NICE DAY  🎉";
 pub const box_icons = [_][*:0]const u8{ "  󰎤  ", "  󰎧  ", "  󰎪  ", "  󰎭  ", "  󰎱  ", "  󰎳  ", "  󰎶  ", "  󰎹  ", "  󰎼  ", "  󰽽  " };
 pub const boxes_icons = [_][*:0]const u8{ "  󰼏  ", "  󰼐  ", "  󰼑  ", "  󰼒  ", "  󰼓  ", "  󰼔  ", "  󰼕  ", "  󰼖  ", "  󰼗  ", "  󰿪  " };
 pub const app_icon_fallback: [*:0]const u8 = "    ";
@@ -51,20 +52,32 @@ pub const app_icons = [_]struct { id: [*:0]const u8, icon: [*:0]const u8 }{
 };
 
 pub const startup_cmds = [_][]const []const u8{
-    &.{ "foot", "-s" },
+    &.{ "sh", "-c", "foot -s" },
+    &.{ "sh", "-c", "mako" },
+    &.{ "sh", "-c", "swaybg -m fill -i ~/.config/wallpaper" },
+    &.{ "sh", "-c", "wl-clip-persist --clipboard regular" },
+    &.{ "sh", "-c", "mkfifo $XDG_RUNTIME_DIR/wob.sock && tail -f $XDG_RUNTIME_DIR/wob.sock | wob" },
 };
 
 pub const terminal = "footclient";
 pub const launcher = "fuzzel";
+pub const locker = "swaylock";
 
 const mod______: Modifiers = .{ .mod4 = true };
 const mod_shift: Modifiers = .{ .mod4 = true, .shift = true };
 const mod_ctrl_: Modifiers = .{ .mod4 = true, .ctrl = true };
 const mod_all__: Modifiers = .{ .mod4 = true, .ctrl = true, .shift = true };
 pub const mappers = [_]Binding.Mapper{
-    .{ .modifiers = mod______, .trigger = .{ .keysym = .Escape }, .action = .toggle_passthrough },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .Escape }, .action = .toggle_passthrough, .allow_when_locked = true },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .Return }, .action = .{ .spawn = &.{terminal} } },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .space }, .action = .{ .spawn = &.{launcher} } },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .BackSpace }, .action = .{ .spawn = &.{locker} } },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .slash }, .action = .{ .spawn = &.{ "sh", "-c", "notify-send \"$(date)\"" } } },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .minus }, .action = .{ .spawn = &.{ "sh", "-c", "brightnessctl set 5%- | sed -En 's/.*\\(([0-9]+)%\\).*/\\1/p' > $XDG_RUNTIME_DIR/wob.sock" } }, .allow_when_locked = true },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .equal }, .action = .{ .spawn = &.{ "sh", "-c", "brightnessctl set +5% | sed -En 's/.*\\(([0-9]+)%\\).*/\\1/p' > $XDG_RUNTIME_DIR/wob.sock" } }, .allow_when_locked = true },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .bracketleft }, .action = .{ .spawn = &.{ "sh", "-c", "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $XDG_RUNTIME_DIR/wob.sock" } }, .allow_when_locked = true },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .bracketright }, .action = .{ .spawn = &.{ "sh", "-c", "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+ && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $XDG_RUNTIME_DIR/wob.sock" } }, .allow_when_locked = true },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .backslash }, .action = .{ .spawn = &.{ "sh", "-c", "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && (wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q MUTED && echo 0 > $XDG_RUNTIME_DIR/wob.sock) || wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $XDG_RUNTIME_DIR/wob.sock" } }, .allow_when_locked = true },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .k }, .action = .{ .iterate_window_weight = .forward } },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .j }, .action = .{ .iterate_window_weight = .reverse } },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .l }, .action = .{ .iterate_window_focus = .forward } },
@@ -114,6 +127,5 @@ pub const mappers = [_]Binding.Mapper{
     .{ .modifiers = mod______, .trigger = .{ .keysym = .a }, .action = .toggle_window_fullscreen },
     .{ .modifiers = mod______, .trigger = .{ .button = .left }, .action = .enable_window_floating },
     .{ .modifiers = mod______, .trigger = .{ .button = .right }, .action = .disable_window_floating },
-    .{ .modifiers = mod______, .trigger = .{ .keysym = .BackSpace }, .action = .refresh },
     .{ .modifiers = mod_shift, .trigger = .{ .keysym = .Escape }, .action = .quit },
 };

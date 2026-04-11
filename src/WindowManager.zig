@@ -221,7 +221,9 @@ fn river_window_manager_listener(_: *river.WindowManagerV1, event: river.WindowM
             var seat_iterator = self.seats.iterator(.forward);
             while (seat_iterator.next()) |seat| {
                 var binding_iterator = seat.bindings.iterator(.forward);
-                while (binding_iterator.next()) |binding| binding.switchEnabled(false);
+                while (binding_iterator.next()) |binding| {
+                    if (!binding.mapper.allow_when_locked) binding.switchLocked(true);
+                }
             }
         },
         .session_unlocked => {
@@ -229,7 +231,9 @@ fn river_window_manager_listener(_: *river.WindowManagerV1, event: river.WindowM
             while (seat_iterator.next()) |seat| {
                 seat.focused_updated = true;
                 var binding_iterator = seat.bindings.iterator(.forward);
-                while (binding_iterator.next()) |binding| binding.switchEnabled(true);
+                while (binding_iterator.next()) |binding| {
+                    if (!binding.mapper.allow_when_locked) binding.switchLocked(false);
+                }
             }
         },
     }

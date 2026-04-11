@@ -36,9 +36,9 @@ pub const Mapper = struct {
         toggle_window_fullscreen,
         enable_window_floating,
         disable_window_floating,
-        refresh,
         quit,
     },
+    allow_when_locked: bool = false,
 };
 
 const Self = @This();
@@ -53,6 +53,8 @@ river_binding: union(enum) {
 link: wl.list.Link = undefined,
 enabled_updated: bool = false,
 enabled: bool = false,
+toggle: bool = false,
+locked: bool = false,
 
 pub fn create(seat: *Seat, mapper: *const Mapper) *Self {
     const self = seat.allocator.create(Self) catch unreachable;
@@ -134,8 +136,22 @@ pub fn manage(self: *Self) void {
     }
 }
 
-pub fn switchEnabled(self: *Self, enabled_or_null: ?bool) void {
-    const enabled = if (enabled_or_null) |nonull_enabled| nonull_enabled else !self.enabled;
+pub fn switchToggle(self: *Self, toggle_or_null: ?bool) void {
+    const toggle = if (toggle_or_null) |nonull_toggle| nonull_toggle else !self.toggle;
+    if (toggle == self.toggle) return;
+    self.toggle = toggle;
+    self.update_enabled();
+}
+
+pub fn switchLocked(self: *Self, locked_or_null: ?bool) void {
+    const locked = if (locked_or_null) |nonull_locked| nonull_locked else !self.locked;
+    if (locked == self.locked) return;
+    self.locked = locked;
+    self.update_enabled();
+}
+
+pub fn update_enabled(self: *Self) void {
+    const enabled = !self.locked and self.toggle;
     if (enabled == self.enabled) return;
     self.enabled = enabled;
     self.enabled_updated = true;
@@ -148,7 +164,7 @@ fn execute(self: *Self) void {
         .toggle_passthrough => {
             var binding_iterator = seat.bindings.iterator(.forward);
             while (binding_iterator.next()) |binding| {
-                if (binding.mapper.action != .toggle_passthrough) binding.switchEnabled(null);
+                if (binding != self) binding.switchToggle(null);
             }
         },
         .spawn => |cmd| {
@@ -296,13 +312,6 @@ fn execute(self: *Self) void {
             if (seat.hovered) |window| {
                 seat.focus(window);
                 window.switchFloating(false);
-            }
-        },
-        .refresh => {
-            var output_iterator = window_manager.outputs.iterator(.forward);
-            while (output_iterator.next()) |output| {
-                output.dirty = true;
-                output.bar.dirty = true;
             }
         },
         .quit => {

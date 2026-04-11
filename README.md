@@ -49,6 +49,15 @@ zig build -Doptimize=ReleaseSafe --prefix ~/.local install
 river -c bridge
 ```
 
+> Recommended tools
+> - fuzzel
+> - foot
+> - mako
+> - swaybg
+> - swaylock
+> - wl-clip-persist
+> - wob
+
 ## How to config Bridge?
 
 Edit the `src/config.zig` and re-build.
