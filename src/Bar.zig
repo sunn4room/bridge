@@ -187,7 +187,7 @@ pub fn manage(self: *Self) void {
             }
         }
 
-        if (weights_width == 0) {
+        if (windows_width == 0) {
             const icon_width = self.getIcon(config.placeholder).width;
             const icon_position: i32 = @divFloor(width - icon_width, 2);
             _ = buffer.stamp(config.placeholder, icon_position, null, &config.bar_theme);
