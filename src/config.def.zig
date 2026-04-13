@@ -34,6 +34,7 @@ pub const app_icons = [_]struct { id: [*:0]const u8, icon: [*:0]const u8 }{
     .{ .icon = "    ", .id = "code" },
     .{ .icon = "    ", .id = "codium" },
     .{ .icon = "    ", .id = "mpv" },
+    .{ .icon = "    ", .id = "KeePassXC" },
     .{ .icon = "    ", .id = "alacritty" },
     .{ .icon = "    ", .id = "kitty" },
     .{ .icon = "    ", .id = "ghostty" },

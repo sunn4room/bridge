@@ -159,23 +159,23 @@ pub fn manage(self: *Self) void {
 }
 
 pub fn changeView(self: *Self, view: u4) ?*Window {
-    var first_sticky_window: ?*Window = null;
+    var sticky_window_or_null: ?*Window = null;
 
     if (view != self.view) {
         self.view = view;
         self.bar.dirty = true;
 
-        var window_iterator = self.window_manager.windows.iterator(.forward);
+        var window_iterator = self.window_manager.fwindows.iterator(.reverse);
         while (window_iterator.next()) |window| {
             if (window.placed == self) {
                 window.update_sticky();
-                if (window.sticky and first_sticky_window == null) {
-                    first_sticky_window = window;
+                if (window.sticky and sticky_window_or_null == null) {
+                    sticky_window_or_null = window;
                 }
             }
         }
     }
-    return first_sticky_window;
+    return sticky_window_or_null;
 }
 
 pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {

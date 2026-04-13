@@ -147,9 +147,9 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
                     for (&output.buttons) |*button| {
                         counter += 1;
                         if (button.hit(self.x, self.y)) {
-                            const first_sticky_window_or_null = output.changeView(counter);
-                            if (first_sticky_window_or_null) |first_sticky_window| {
-                                self.focus(first_sticky_window);
+                            const sticky_window_or_null = output.changeView(counter);
+                            if (sticky_window_or_null) |sticky_window| {
+                                self.focus(sticky_window);
                             }
                             break;
                         }
