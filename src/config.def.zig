@@ -57,7 +57,7 @@ pub const startup_cmds = [_][]const []const u8{
     &.{ "sh", "-c", "mako" },
     &.{ "sh", "-c", "swaybg -m fill -i ~/.config/wallpaper" },
     &.{ "sh", "-c", "wl-clip-persist --clipboard regular" },
-    &.{ "sh", "-c", "rm -f $XDG_RUNTIME_DIR/wob.sock && mkfifo $XDG_RUNTIME_DIR/wob.sock && tail -f $XDG_RUNTIME_DIR/wob.sock | wob" },
+    &.{ "sh", "-c", "rm -f $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock && mkfifo $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock && tail -f $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock | wob" },
 };
 
 pub const terminal = "footclient";
@@ -74,11 +74,11 @@ pub const mappers = [_]Binding.Mapper{
     .{ .modifiers = mod______, .trigger = .{ .keysym = .space }, .action = .{ .spawn = &.{launcher} } },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .BackSpace }, .action = .{ .spawn = &.{locker} } },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .slash }, .action = .{ .spawn = &.{ "sh", "-c", "notify-send \"$(date)\"" } } },
-    .{ .modifiers = mod______, .trigger = .{ .keysym = .minus }, .action = .{ .spawn = &.{ "sh", "-c", "brightnessctl set 5%- | sed -En 's/.*\\(([0-9]+)%\\).*/\\1/p' > $XDG_RUNTIME_DIR/wob.sock" } }, .allow_when_locked = true },
-    .{ .modifiers = mod______, .trigger = .{ .keysym = .equal }, .action = .{ .spawn = &.{ "sh", "-c", "brightnessctl set +5% | sed -En 's/.*\\(([0-9]+)%\\).*/\\1/p' > $XDG_RUNTIME_DIR/wob.sock" } }, .allow_when_locked = true },
-    .{ .modifiers = mod______, .trigger = .{ .keysym = .bracketleft }, .action = .{ .spawn = &.{ "sh", "-c", "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $XDG_RUNTIME_DIR/wob.sock" } }, .allow_when_locked = true },
-    .{ .modifiers = mod______, .trigger = .{ .keysym = .bracketright }, .action = .{ .spawn = &.{ "sh", "-c", "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+ && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $XDG_RUNTIME_DIR/wob.sock" } }, .allow_when_locked = true },
-    .{ .modifiers = mod______, .trigger = .{ .keysym = .backslash }, .action = .{ .spawn = &.{ "sh", "-c", "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && (wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q MUTED && echo 0 > $XDG_RUNTIME_DIR/wob.sock) || wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $XDG_RUNTIME_DIR/wob.sock" } }, .allow_when_locked = true },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .minus }, .action = .{ .spawn = &.{ "sh", "-c", "brightnessctl set 5%- | sed -En 's/.*\\(([0-9]+)%\\).*/\\1/p' > $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock" } }, .allow_when_locked = true },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .equal }, .action = .{ .spawn = &.{ "sh", "-c", "brightnessctl set +5% | sed -En 's/.*\\(([0-9]+)%\\).*/\\1/p' > $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock" } }, .allow_when_locked = true },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .bracketleft }, .action = .{ .spawn = &.{ "sh", "-c", "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock" } }, .allow_when_locked = true },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .bracketright }, .action = .{ .spawn = &.{ "sh", "-c", "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+ && wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock" } }, .allow_when_locked = true },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .backslash }, .action = .{ .spawn = &.{ "sh", "-c", "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle && (wpctl get-volume @DEFAULT_AUDIO_SINK@ | grep -q MUTED && echo 0 > $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock) || wpctl get-volume @DEFAULT_AUDIO_SINK@ | sed 's/[^0-9]//g' > $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock" } }, .allow_when_locked = true },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .k }, .action = .{ .iterate_window_weight = .forward } },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .j }, .action = .{ .iterate_window_weight = .reverse } },
     .{ .modifiers = mod______, .trigger = .{ .keysym = .l }, .action = .{ .iterate_window_focus = .forward } },
