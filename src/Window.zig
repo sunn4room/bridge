@@ -233,6 +233,7 @@ pub fn focus(self: *Self, focused: bool) void {
         self.flink.remove();
         self.window_manager.fwindows.append(self);
         if (self.focused == 1) updated = true;
+        if (self.floating) self.floating_updated = true;
     } else {
         self.focused -= 1;
         if (self.focused == 0) updated = true;
