@@ -1,5 +1,6 @@
 const std = @import("std");
 const posix = std.posix;
+const builtin = @import("builtin");
 const wayland = @import("wayland");
 const wl = wayland.client.wl;
 
@@ -14,7 +15,11 @@ pub fn main() void {
     };
     defer wl_display.disconnect();
 
-    const window_manager = WindowManager.create(std.heap.c_allocator, wl_display);
+    const window_manager = if (builtin.mode == .Debug) blk: {
+        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        defer if (gpa.deinit() != .ok) unreachable;
+        break :blk WindowManager.create(gpa.allocator(), wl_display);
+    } else WindowManager.create(std.heap.c_allocator, wl_display);
     defer window_manager.destroy();
 
     const wl_fd = wl_display.getFd();
