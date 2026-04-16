@@ -15,11 +15,12 @@ pub fn main() void {
     };
     defer wl_display.disconnect();
 
-    const window_manager = if (builtin.mode == .Debug) blk: {
-        var da: std.heap.DebugAllocator(.{}) = .init;
-        defer if (da.deinit() != .ok) unreachable;
-        break :blk WindowManager.create(da.allocator(), wl_display);
-    } else WindowManager.create(std.heap.c_allocator, wl_display);
+    var debug_allocator_or_null: ?std.heap.DebugAllocator(.{}) = if (builtin.mode == .Debug) .init else null;
+    defer if (debug_allocator_or_null) |*debug_allocator| {
+        if (debug_allocator.deinit() != .ok) unreachable;
+    };
+    const allocator = if (debug_allocator_or_null) |*debug_allocator| debug_allocator.allocator() else std.heap.c_allocator;
+    const window_manager = WindowManager.create(allocator, wl_display);
     defer window_manager.destroy();
 
     const wl_fd = wl_display.getFd();
