@@ -120,7 +120,7 @@ pub fn manage(self: *Self) void {
         {
             var window_iterator = self.output.window_manager.windows.iterator(.forward);
             while (window_iterator.next()) |window| {
-                if (window.placed == self.output) {
+                if (window.available and window.placed == self.output) {
                     views |= window.views;
                     windows_width += self.getIcon(window.icon).width;
                     if (window.visible) {
@@ -158,7 +158,7 @@ pub fn manage(self: *Self) void {
             var weights_position: i32 = width - weights_width;
             var window_iterator = self.output.window_manager.windows.iterator(.forward);
             while (window_iterator.next()) |window| {
-                if (window.placed == self.output) {
+                if (window.available and window.placed == self.output) {
                     const window_icon = window.icon;
                     const weight_icon = config.box_icons[window.weight - 1];
                     const old_windows_position = windows_position;

@@ -19,7 +19,7 @@ window_manager: *WindowManager,
 river_output: *river.OutputV1,
 river_layer_shell_output: *river.LayerShellOutputV1,
 link: wl.list.Link = undefined,
-new: bool = true,
+available: bool = false,
 area: Rect = undefined,
 view: u4 = 1,
 buttons: [10]Rect = undefined,
@@ -88,9 +88,9 @@ fn river_layer_shell_output_listener(_: *river.LayerShellOutputV1, event: river.
                 .w = area.width,
                 .h = area.height,
             };
-            self.new = false;
             self.dirty = true;
             self.bar.dirty = true;
+            self.makeAvailable();
         },
     }
 }
@@ -108,7 +108,7 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
 }
 
 pub fn manage(self: *Self) void {
-    if (self.new) return;
+    if (!self.available) return;
 
     self.bar.manage();
 
@@ -118,7 +118,7 @@ pub fn manage(self: *Self) void {
         var total_weight: i32 = 0;
         var window_iterator = self.window_manager.windows.iterator(.forward);
         while (window_iterator.next()) |window| {
-            if (window.placed == self and window.visible and !window.floating) {
+            if (window.available and window.placed == self and window.visible and !window.floating) {
                 total_weight += window.weight;
             }
         }
@@ -127,7 +127,7 @@ pub fn manage(self: *Self) void {
             var occupied_weight: i32 = 0;
             window_iterator = self.window_manager.windows.iterator(.forward);
             while (window_iterator.next()) |window| {
-                if (window.placed == self and window.visible and !window.floating) {
+                if (window.available and window.placed == self and window.visible and !window.floating) {
                     var area: Rect = undefined;
                     const gap: i32 = config.layout_gap;
                     const total_width: i32 = self.area.w - gap;
@@ -155,6 +155,16 @@ pub fn manage(self: *Self) void {
                 }
             }
         }
+    }
+}
+
+pub fn makeAvailable(self: *Self) void {
+    if (self.available) return;
+    self.available = true;
+
+    var window_iterator = self.window_manager.windows.iterator(.forward);
+    while (window_iterator.next()) |window| {
+        if (window.placed == self) window.update_visible();
     }
 }
 

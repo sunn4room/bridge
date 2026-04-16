@@ -24,6 +24,7 @@ area: Rect = undefined,
 buttons: [2]Rect = undefined,
 icon: [*:0]const u8 = config.app_icon_fallback,
 new: bool = true,
+available: bool = false,
 close: bool = false,
 weight: u4 = 5,
 views: u10 = 0,
@@ -109,7 +110,9 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
                 seat.resize(self, data.edges);
             }
         },
-        .dimensions,
+        .dimensions => {
+            self.makeAvailable();
+        },
         .dimensions_hint,
         .title,
         .parent,
@@ -156,7 +159,10 @@ pub fn manage(self: *Self) void {
         self.new = false;
         self.river_window.useSsd();
         self.river_window.setTiled(.{ .top = true, .bottom = true, .left = true, .right = true });
+        self.river_window.proposeDimensions(0, 0);
     }
+
+    if (!self.available) return;
 
     if (self.close) {
         self.close = false;
@@ -206,6 +212,18 @@ pub fn manage(self: *Self) void {
     }
 }
 
+pub fn makeAvailable(self: *Self) void {
+    if (self.available) return;
+    self.available = true;
+
+    if (self.placed) |output| {
+        output.dirty = true;
+        output.bar.dirty = true;
+    }
+    self.update_visible();
+    self.window_manager.river_window_manager.manageDirty();
+}
+
 pub fn place(self: *Self, output: ?*Output) void {
     if (output != self.placed) {
         self.switchFloating(false);
@@ -217,8 +235,10 @@ pub fn place(self: *Self, output: ?*Output) void {
         }
         self.placed = output;
         if (self.placed) |new_output| {
-            new_output.dirty = true;
-            new_output.bar.dirty = true;
+            if (self.available) {
+                new_output.dirty = true;
+                new_output.bar.dirty = true;
+            }
         }
 
         self.update_sticky();
@@ -285,7 +305,9 @@ pub fn update_border(self: *Self) void {
 }
 
 pub fn update_visible(self: *Self) void {
-    const visible: bool = self.placed != null and (self.focused != 0 or self.sticky);
+    const placed = self.placed != null and self.placed.?.available;
+    const focused_or_sticky = self.focused != 0 or self.sticky;
+    const visible: bool = self.available and placed and focused_or_sticky;
 
     if (visible != self.visible) {
         self.visible = visible;
