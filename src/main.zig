@@ -16,9 +16,9 @@ pub fn main() void {
     defer wl_display.disconnect();
 
     const window_manager = if (builtin.mode == .Debug) blk: {
-        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        defer if (gpa.deinit() != .ok) unreachable;
-        break :blk WindowManager.create(gpa.allocator(), wl_display);
+        var da: std.heap.DebugAllocator(.{}) = .init;
+        defer if (da.deinit() != .ok) unreachable;
+        break :blk WindowManager.create(da.allocator(), wl_display);
     } else WindowManager.create(std.heap.c_allocator, wl_display);
     defer window_manager.destroy();
 
