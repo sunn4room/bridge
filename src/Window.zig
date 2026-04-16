@@ -320,6 +320,14 @@ pub fn switchFullscreen(self: *Self, fullscreen_or_null: ?bool) void {
                 old_window.switchFullscreen(false);
             }
             output.fullscreen = self;
+            var seat_iterator = self.window_manager.seats.iterator(.forward);
+            while (seat_iterator.next()) |seat| {
+                if (seat.focused) |window| {
+                    if (window.placed == output) {
+                        seat.focus(self);
+                    }
+                }
+            }
         } else {
             output.fullscreen = null;
         }
