@@ -32,7 +32,7 @@ river_layer_shell: *river.LayerShellV1 = undefined,
 river_layer_shell_name: ?u32 = null,
 seats: wl.list.Head(Seat, .link) = undefined,
 windows: wl.list.Head(Window, .link) = undefined,
-fwindows: wl.list.Head(Window, .flink) = undefined,
+unavailable_windows: wl.list.Head(Window, .link) = undefined,
 outputs: wl.list.Head(Output, .link) = undefined,
 bar_height: i32 = undefined,
 running: bool = false,
@@ -46,7 +46,7 @@ pub fn create(allocator: std.mem.Allocator, wl_display: *wl.Display) *Self {
 
     self.seats.init();
     self.windows.init();
-    self.fwindows.init();
+    self.unavailable_windows.init();
     self.outputs.init();
 
     const basic_font = util.getFont(120);
@@ -91,6 +91,8 @@ pub fn destroy(self: *Self) void {
     while (seat_iterator.next()) |seat| seat.destroy();
     var window_iterator = self.windows.iterator(.forward);
     while (window_iterator.next()) |window| window.destroy();
+    var unavailable_window_iterator = self.unavailable_windows.iterator(.forward);
+    while (unavailable_window_iterator.next()) |unavailable_window| unavailable_window.destroy();
     var output_iterator = self.outputs.iterator(.forward);
     while (output_iterator.next()) |output| output.destroy();
 
@@ -174,35 +176,26 @@ fn river_window_manager_listener(_: *river.WindowManagerV1, event: river.WindowM
         .seat => |data| {
             const river_seat = data.id;
             const seat = Seat.create(self, river_seat);
-
             self.seats.append(seat);
-            seat.focus(self.fwindows.last());
+            seat.pre();
         },
         .window => |data| {
             const river_window = data.id;
             const window = Window.create(self, river_window);
-
-            self.fwindows.append(window);
-            const last_focused_window = window.fiterate(.reverse);
-            if (last_focused_window == window) {
-                self.windows.append(window);
-                window.place(self.outputs.first());
-            } else {
-                last_focused_window.link.insert(&window.link);
-                window.place(last_focused_window.placed);
-            }
-            var seat_iterator = self.seats.iterator(.forward);
-            while (seat_iterator.next()) |seat| seat.focus(window);
+            self.unavailable_windows.append(window);
         },
         .output => |data| {
             const river_output = data.id;
-            const output = Output.create(self, river_output);
-
-            self.outputs.append(output);
-            var window_iterator = self.windows.iterator(.forward);
-            while (window_iterator.next()) |window| if (window.placed == null) window.place(output);
+            _ = Output.create(self, river_output);
         },
         .manage_start => {
+            var unavailable_window_iterator = self.unavailable_windows.iterator(.forward);
+            while (unavailable_window_iterator.next()) |unavailable_window| {
+                unavailable_window.init();
+                unavailable_window.link.remove();
+                unavailable_window.link.init();
+            }
+
             var seat_iterator = self.seats.iterator(.forward);
             while (seat_iterator.next()) |seat| seat.manage();
             var window_iterator = self.windows.iterator(.forward);

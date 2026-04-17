@@ -18,13 +18,10 @@ window_manager: *WindowManager,
 river_window: *river.WindowV1,
 river_node: *river.NodeV1,
 link: wl.list.Link = undefined,
-flink: wl.list.Link = undefined,
 placed: ?*Output = null,
 area: Rect = undefined,
 buttons: [2]Rect = undefined,
 icon: [*:0]const u8 = config.app_icon_fallback,
-new: bool = true,
-available: bool = false,
 close: bool = false,
 weight: u4 = 5,
 views: u10 = 0,
@@ -50,16 +47,49 @@ pub fn create(window_manager: *WindowManager, river_window: *river.WindowV1) *Se
 
     river_window.setListener(*Self, river_window_listener, self);
     self.link.init();
-    self.flink.init();
 
     log.debug("{f} has been created.", .{self});
     return self;
 }
 
+pub fn pre(self: *Self) void {
+    const last_window = self.iterate(.reverse);
+    if (last_window == self) {
+        self.place(self.window_manager.outputs.first());
+    } else {
+        self.place(last_window.placed);
+    }
+    var output: ?*Output = self.window_manager.outputs.first();
+    if (self.window_manager.seats.first()) |first_seat| {
+        if (first_seat.focused) |focused_window| {
+            self.link.remove();
+            focused_window.link.insert(&self.link);
+            if (focused_window.placed) |focused_output| output = focused_output;
+        }
+    }
+    self.place(output);
+    var seat_iterator = self.window_manager.seats.iterator(.forward);
+    while (seat_iterator.next()) |seat| seat.focus(self);
+}
+
+pub fn post(self: *Self) void {
+    self.place(null);
+    var fallback: ?*Self = null;
+    const last_window = self.iterate(.reverse);
+    if (last_window != self) fallback = last_window;
+
+    var seat_iterator = self.window_manager.seats.iterator(.forward);
+    while (seat_iterator.next()) |seat| {
+        seat.cancel(self);
+        if (seat.focused == self) {
+            seat.focus(fallback);
+        }
+    }
+}
+
 pub fn destroy(self: *Self) void {
     log.debug("{f} is about to be destroyed.", .{self});
 
-    self.flink.remove();
     self.link.remove();
     self.river_node.destroy();
     self.river_window.destroy();
@@ -70,18 +100,7 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
     log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .closed => {
-            self.place(null);
-            var fallback: ?*Self = null;
-            const last_focused_window = self.fiterate(.reverse);
-            if (last_focused_window != self) fallback = last_focused_window;
-
-            var seat_iterator = self.window_manager.seats.iterator(.forward);
-            while (seat_iterator.next()) |seat| {
-                seat.cancel(self);
-                if (seat.focused == self) {
-                    seat.focus(fallback);
-                }
-            }
+            self.post();
             self.destroy();
         },
         .fullscreen_requested => |data| {
@@ -111,20 +130,12 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
             }
         },
         .dimensions => {
-            self.makeAvailable();
+            if (self.link.next == &self.link) {
+                self.window_manager.windows.append(self);
+                self.pre();
+            }
         },
-        .dimensions_hint,
-        .title,
-        .parent,
-        .decoration_hint,
-        .show_window_menu_requested,
-        .maximize_requested,
-        .unmaximize_requested,
-        .minimize_requested,
-        .unreliable_pid,
-        .presentation_hint,
-        .identifier,
-        => {
+        else => {
             log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
         },
     }
@@ -142,28 +153,15 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
     };
 }
 
-pub fn fiterate(self: *Self, dir: wl.list.Direction) *Self {
-    var flink: *wl.list.Link = &self.flink;
-    return while (true) {
-        flink = switch (dir) {
-            .forward => flink.next.?,
-            .reverse => flink.prev.?,
-        };
-        if (flink == &self.window_manager.fwindows.link) continue;
-        break @fieldParentPtr("flink", flink);
-    };
+pub fn init(self: *Self) void {
+    self.river_window.useSsd();
+    self.river_window.setTiled(.{ .top = true, .bottom = true, .left = true, .right = true });
+    self.river_window.proposeDimensions(0, 0);
+    self.river_window.setBorders(.{ .top = true, .bottom = true, .left = true, .right = true }, config.border_width, self.border.r, self.border.g, self.border.b, self.border.a);
+    self.river_window.hide();
 }
 
 pub fn manage(self: *Self) void {
-    if (self.new) {
-        self.new = false;
-        self.river_window.useSsd();
-        self.river_window.setTiled(.{ .top = true, .bottom = true, .left = true, .right = true });
-        self.river_window.proposeDimensions(0, 0);
-    }
-
-    if (!self.available) return;
-
     if (self.close) {
         self.close = false;
         self.river_window.close();
@@ -176,7 +174,6 @@ pub fn manage(self: *Self) void {
 
     if (self.visible_updated) {
         self.visible_updated = false;
-
         if (self.visible) {
             self.river_window.show();
         } else {
@@ -187,7 +184,6 @@ pub fn manage(self: *Self) void {
 
     if (self.floating_updated) {
         self.floating_updated = false;
-
         if (self.floating) {
             self.river_node.placeTop();
         } else {
@@ -198,7 +194,6 @@ pub fn manage(self: *Self) void {
 
     if (self.fullscreen_updated) {
         self.fullscreen_updated = false;
-
         if (self.fullscreen) {
             self.river_window.informFullscreen();
             self.river_window.fullscreen(self.placed.?.river_output);
@@ -212,46 +207,29 @@ pub fn manage(self: *Self) void {
     }
 }
 
-pub fn makeAvailable(self: *Self) void {
-    if (self.available) return;
-    self.available = true;
-
-    if (self.placed) |output| {
-        output.dirty = true;
-        output.bar.dirty = true;
-    }
-    self.update_visible();
-    self.window_manager.river_window_manager.manageDirty();
-}
-
 pub fn place(self: *Self, output: ?*Output) void {
-    if (output != self.placed) {
-        self.switchFloating(false);
-        self.switchFullscreen(false);
+    if (output == self.placed) return;
 
-        if (self.placed) |old_output| {
-            old_output.dirty = true;
-            old_output.bar.dirty = true;
-        }
-        self.placed = output;
-        if (self.placed) |new_output| {
-            if (self.available) {
-                new_output.dirty = true;
-                new_output.bar.dirty = true;
-            }
-        }
-
-        self.update_sticky();
-        self.update_visible();
+    if (self.placed) |old_output| {
+        old_output.bar.dirty = true;
+        if (!self.floating and self.visible) old_output.dirty = true;
     }
+    self.switchFloating(false);
+    self.switchFullscreen(false);
+
+    self.placed = output;
+    if (self.placed) |new_output| new_output.bar.dirty = true;
+
+    self.updateSticky();
+    self.visible = false;
+    self.visible_updated = true;
+    self.updateVisible();
 }
 
 pub fn focus(self: *Self, focused: bool) void {
     var updated: bool = false;
     if (focused) {
         self.focused += 1;
-        self.flink.remove();
-        self.window_manager.fwindows.append(self);
         if (self.focused == 1) updated = true;
         if (self.floating) self.floating_updated = true;
     } else {
@@ -259,37 +237,36 @@ pub fn focus(self: *Self, focused: bool) void {
         if (self.focused == 0) updated = true;
     }
 
-    if (updated) {
-        if (self.placed) |output| output.bar.dirty = true;
-        self.update_border();
-        self.update_visible();
-    }
+    if (!updated) return;
+
+    if (self.placed) |output| output.bar.dirty = true;
+    self.updateBorder();
+    self.updateVisible();
 }
 
 pub fn switchSticky(self: *Self, sticky_or_null: ?bool) void {
     if (self.placed) |output| {
-        const sticky = if (sticky_or_null) |nonull_sticky| nonull_sticky else !self.sticky;
+        const sticky = if (sticky_or_null) |notnull_sticky| notnull_sticky else !self.sticky;
         if (self.sticky == sticky) return;
         self.views ^= @as(u10, 1) << (output.view - 1);
-        self.update_sticky();
+        self.updateSticky();
     }
 }
 
-pub fn update_sticky(self: *Self) void {
+pub fn updateSticky(self: *Self) void {
     var sticky: bool = false;
     if (self.placed) |output| {
         sticky = self.views & (@as(u10, 1) << (output.view - 1)) != 0;
     }
+    if (sticky == self.sticky) return;
 
-    if (sticky != self.sticky) {
-        self.sticky = sticky;
-        if (self.placed) |output| output.bar.dirty = true;
-        self.update_border();
-        self.update_visible();
-    }
+    self.sticky = sticky;
+    if (self.placed) |output| output.bar.dirty = true;
+    self.updateBorder();
+    self.updateVisible();
 }
 
-pub fn update_border(self: *Self) void {
+pub fn updateBorder(self: *Self) void {
     var border = &config.border_normal;
     if (self.focused != 0) {
         border = &config.border_focused;
@@ -297,46 +274,42 @@ pub fn update_border(self: *Self) void {
             border = &config.border_sticky;
         }
     }
+    if (border == self.border) return;
 
-    if (border != self.border) {
-        self.border = border;
-        self.border_updated = true;
-    }
+    self.border = border;
+    self.border_updated = true;
 }
 
-pub fn update_visible(self: *Self) void {
-    const placed = self.placed != null and self.placed.?.available;
-    const focused_or_sticky = self.focused != 0 or self.sticky;
-    const visible: bool = self.available and placed and focused_or_sticky;
+pub fn updateVisible(self: *Self) void {
+    const visible: bool = self.placed != null and (self.focused != 0 or self.sticky);
+    if (visible == self.visible) return;
 
-    if (visible != self.visible) {
-        self.visible = visible;
-        self.visible_updated = true;
-        if (self.placed) |output| {
-            output.bar.dirty = true;
-            if (!self.floating) output.dirty = true;
-        }
+    self.visible = visible;
+    self.visible_updated = true;
+    if (self.placed) |output| {
+        output.bar.dirty = true;
+        if (!self.floating) output.dirty = true;
     }
 }
 
 pub fn changeWeight(self: *Self, weight: u4) void {
-    if (weight != self.weight) {
-        self.weight = weight;
-        if (self.placed) |output| {
-            output.bar.dirty = true;
-            if (self.visible and !self.floating) output.dirty = true;
-        }
+    if (weight == self.weight) return;
+
+    self.weight = weight;
+    if (self.placed) |output| {
+        output.bar.dirty = true;
+        if (self.visible and !self.floating) output.dirty = true;
     }
 }
 
 pub fn switchFullscreen(self: *Self, fullscreen_or_null: ?bool) void {
-    const fullscreen = if (fullscreen_or_null) |nonull_fullscreen| nonull_fullscreen else !self.fullscreen;
-    if (fullscreen == self.fullscreen) return;
-
-    self.fullscreen = fullscreen;
-    self.fullscreen_updated = true;
-
     if (self.placed) |output| {
+        const fullscreen = if (fullscreen_or_null) |notnull_fullscreen| notnull_fullscreen else !self.fullscreen;
+        if (fullscreen == self.fullscreen) return;
+
+        self.fullscreen = fullscreen;
+        self.fullscreen_updated = true;
+
         if (self.fullscreen) {
             if (output.fullscreen) |old_window| {
                 old_window.switchFullscreen(false);
@@ -362,7 +335,9 @@ pub fn switchFloating(self: *Self, floating_or_null: ?bool) void {
 
     self.floating = floating;
     self.floating_updated = true;
-    if (self.placed) |output| output.dirty = true;
+    if (self.placed) |output| {
+        if (self.visible) output.dirty = true;
+    }
 }
 
 pub fn changeIcon(self: *Self, id: ?[*:0]const u8) void {
@@ -386,12 +361,12 @@ pub fn swap(self: *Self, other: *Self) void {
 
     self.link.swapWith(&other.link);
     if (self.placed) |output| {
-        output.dirty = true;
         output.bar.dirty = true;
+        if (self.visible and !self.floating) output.dirty = true;
     }
     if (other.placed) |output| {
-        output.dirty = true;
         output.bar.dirty = true;
+        if (other.visible and !other.floating) output.dirty = true;
     }
 }
 

@@ -235,7 +235,7 @@ fn execute(self: *Self) void {
                 if (window.placed) |output| {
                     var next_output = output.iterate(dir);
                     next_output: while (next_output != output) : (next_output = next_output.iterate(dir)) {
-                        var window_iterator = window_manager.fwindows.iterator(.reverse);
+                        var window_iterator = window_manager.windows.iterator(.forward);
                         while (window_iterator.next()) |each_window| {
                             if (each_window.placed == next_output) {
                                 seat.focus(each_window);

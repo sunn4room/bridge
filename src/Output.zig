@@ -19,7 +19,6 @@ window_manager: *WindowManager,
 river_output: *river.OutputV1,
 river_layer_shell_output: *river.LayerShellOutputV1,
 link: wl.list.Link = undefined,
-available: bool = false,
 area: Rect = undefined,
 view: u4 = 1,
 buttons: [10]Rect = undefined,
@@ -46,6 +45,21 @@ pub fn create(window_manager: *WindowManager, river_output: *river.OutputV1) *Se
     return self;
 }
 
+pub fn pre(self: *Self) void {
+    var window_iterator = self.window_manager.windows.iterator(.forward);
+    while (window_iterator.next()) |window| if (window.placed == null) window.place(self);
+}
+
+pub fn post(self: *Self) void {
+    var fallback: ?*Self = null;
+    const prev_output = self.iterate(.reverse);
+    if (prev_output != self) fallback = prev_output;
+    var window_iterator = self.window_manager.windows.iterator(.forward);
+    while (window_iterator.next()) |window| {
+        if (window.placed == self) window.place(fallback);
+    }
+}
+
 pub fn destroy(self: *Self) void {
     log.debug("{f} is about to be destroyed.", .{self});
 
@@ -60,19 +74,10 @@ fn river_output_listener(_: *river.OutputV1, event: river.OutputV1.Event, self: 
     log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .removed => {
-            var fallback: ?*Self = null;
-            const prev_output = self.iterate(.reverse);
-            if (prev_output != self) fallback = prev_output;
-            var window_iterator = self.window_manager.windows.iterator(.forward);
-            while (window_iterator.next()) |window| {
-                if (window.placed == self) window.place(fallback);
-            }
+            self.post();
             self.destroy();
         },
-        .wl_output,
-        .dimensions,
-        .position,
-        => {
+        else => {
             log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
         },
     }
@@ -90,7 +95,10 @@ fn river_layer_shell_output_listener(_: *river.LayerShellOutputV1, event: river.
             };
             self.dirty = true;
             self.bar.dirty = true;
-            self.makeAvailable();
+            if (self.link.next == &self.link) {
+                self.window_manager.outputs.append(self);
+                self.pre();
+            }
         },
     }
 }
@@ -108,8 +116,6 @@ pub fn iterate(self: *Self, dir: wl.list.Direction) *Self {
 }
 
 pub fn manage(self: *Self) void {
-    if (!self.available) return;
-
     self.bar.manage();
 
     if (self.dirty) {
@@ -118,7 +124,7 @@ pub fn manage(self: *Self) void {
         var total_weight: i32 = 0;
         var window_iterator = self.window_manager.windows.iterator(.forward);
         while (window_iterator.next()) |window| {
-            if (window.available and window.placed == self and window.visible and !window.floating) {
+            if (window.placed == self and window.visible and !window.floating) {
                 total_weight += window.weight;
             }
         }
@@ -127,7 +133,7 @@ pub fn manage(self: *Self) void {
             var occupied_weight: i32 = 0;
             window_iterator = self.window_manager.windows.iterator(.forward);
             while (window_iterator.next()) |window| {
-                if (window.available and window.placed == self and window.visible and !window.floating) {
+                if (window.placed == self and window.visible and !window.floating) {
                     var area: Rect = undefined;
                     const gap: i32 = config.layout_gap;
                     const total_width: i32 = self.area.w - gap;
@@ -158,16 +164,6 @@ pub fn manage(self: *Self) void {
     }
 }
 
-pub fn makeAvailable(self: *Self) void {
-    if (self.available) return;
-    self.available = true;
-
-    var window_iterator = self.window_manager.windows.iterator(.forward);
-    while (window_iterator.next()) |window| {
-        if (window.placed == self) window.update_visible();
-    }
-}
-
 pub fn changeView(self: *Self, view: u4) ?*Window {
     var sticky_window_or_null: ?*Window = null;
 
@@ -175,10 +171,10 @@ pub fn changeView(self: *Self, view: u4) ?*Window {
         self.view = view;
         self.bar.dirty = true;
 
-        var window_iterator = self.window_manager.fwindows.iterator(.reverse);
+        var window_iterator = self.window_manager.windows.iterator(.forward);
         while (window_iterator.next()) |window| {
             if (window.placed == self) {
-                window.update_sticky();
+                window.updateSticky();
                 if (window.sticky and sticky_window_or_null == null) {
                     sticky_window_or_null = window;
                 }

@@ -103,6 +103,14 @@ pub fn create(window_manager: *WindowManager, river_seat: *river.SeatV1) *Self {
     return self;
 }
 
+pub fn pre(self: *Self) void {
+    self.focus(self.window_manager.windows.last());
+}
+
+pub fn post(self: *Self) void {
+    self.focus(null);
+}
+
 pub fn destroy(self: *Self) void {
     log.debug("{f} is about to be destroyed.", .{self});
 
@@ -118,7 +126,7 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
     log.debug("{f} received {s} event.", .{ self, @tagName(event) });
     switch (event) {
         .removed => {
-            self.focus(null);
+            self.post();
             self.destroy();
         },
         .pointer_position => |data| {
@@ -175,8 +183,7 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
         .op_release => {
             self.cancel(null);
         },
-        .wl_seat,
-        => {
+        else => {
             log.debug("{f} ignored {s} event.", .{ self, @tagName(event) });
         },
     }
@@ -207,13 +214,15 @@ pub fn manage(self: *Self) void {
     if (self.layer_focus != .exclusive) {
         if (self.focused_updated) {
             self.focused_updated = false;
-            self.layer_focus = .none;
 
             if (self.focused) |window| {
                 self.river_seat.focusWindow(window.river_window);
+                self.link.remove();
+                self.window_manager.seats.prepend(self);
                 if (window.placed) |output| {
                     output.river_layer_shell_output.setDefault();
                 }
+                self.layer_focus = .none;
                 log.debug("{f} has focused on {f}.", .{ self, window });
             } else {
                 self.river_seat.clearFocus();
@@ -309,16 +318,13 @@ pub fn manage(self: *Self) void {
 pub fn focus(self: *Self, original_window: ?*Window) void {
     var window: ?*Window = original_window;
 
-    if (window) |nonull_window| {
-        if (nonull_window.placed) |output| {
+    if (window) |notnull_window| {
+        if (notnull_window.placed) |output| {
             if (output.fullscreen) |fullscreen| window = fullscreen;
         }
     }
 
-    if (self.focused == window) {
-        if (self.layer_focus != .none) self.focused_updated = true;
-        return;
-    }
+    if (self.focused == window) return;
 
     self.cancel(null);
 

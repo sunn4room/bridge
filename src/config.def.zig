@@ -54,7 +54,6 @@ pub const app_icons = [_]struct { id: [*:0]const u8, icon: [*:0]const u8 }{
 
 pub const startup_cmds = [_][]const []const u8{
     &.{ "sh", "-c", "foot -s" },
-    &.{ "sh", "-c", "mako" },
     &.{ "sh", "-c", "swaybg -m fill -i ~/.config/wallpaper" },
     &.{ "sh", "-c", "wl-clip-persist --clipboard regular" },
     &.{ "sh", "-c", "rm -f $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock && mkfifo $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock && tail -f $XDG_RUNTIME_DIR/wob-$WAYLAND_DISPLAY.sock | wob" },
