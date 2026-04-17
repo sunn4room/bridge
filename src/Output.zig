@@ -133,8 +133,8 @@ pub fn manage(self: *Self) void {
                     const total_width: i32 = self.area.w - gap;
                     const occupied_width: i32 = @divFloor(total_width * occupied_weight, total_weight);
                     const window_width: i32 = @divFloor(total_width * window.weight, total_weight);
-                    area.x = gap + occupied_width + config.border_width;
-                    area.y = self.window_manager.bar_height + gap + config.border_width;
+                    area.x = self.area.x + gap + occupied_width + config.border_width;
+                    area.y = self.area.y + self.window_manager.bar_height + gap + config.border_width;
                     area.w = window_width - gap - 2 * config.border_width;
                     area.h = self.area.h - self.window_manager.bar_height - 2 * gap - 2 * config.border_width;
                     window.river_node.setPosition(area.x, area.y);
