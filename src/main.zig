@@ -24,14 +24,14 @@ pub fn main() !void {
     const window_manager = WindowManager.create(allocator, wl_display);
     defer window_manager.destroy();
 
-    const wl_fd: i32 = @intCast(wl_display.getFd());
-    defer posix.close(wl_fd);
-
     var mask = posix.sigemptyset();
     posix.sigaddset(&mask, posix.SIG.TERM);
     posix.sigprocmask(posix.SIG.BLOCK, &mask, null);
     const sig_fd: i32 = posix.signalfd(-1, &mask, 0) catch unreachable;
     defer posix.close(sig_fd);
+
+    const wl_fd: i32 = @intCast(wl_display.getFd());
+    defer posix.close(wl_fd);
 
     const ntf_fd: i32 = @intCast(linux.inotify_init1(0));
     _ = linux.inotify_add_watch(ntf_fd, window_manager.river_home, linux.IN.CLOSE_WRITE | linux.IN.MOVED_TO);
@@ -39,12 +39,12 @@ pub fn main() !void {
 
     var pollfds = [3]posix.pollfd{
         .{
-            .fd = wl_fd,
+            .fd = sig_fd,
             .events = posix.POLL.IN,
             .revents = 0,
         },
         .{
-            .fd = sig_fd,
+            .fd = wl_fd,
             .events = posix.POLL.IN,
             .revents = 0,
         },
@@ -62,11 +62,12 @@ pub fn main() !void {
         _ = posix.poll(&pollfds, -1) catch unreachable;
 
         if (pollfds[0].revents & posix.POLL.IN != 0) {
-            if (wl_display.dispatch() != .SUCCESS) unreachable;
+            window_manager.running = false;
+            continue;
         }
 
         if (pollfds[1].revents & posix.POLL.IN != 0) {
-            window_manager.running = false;
+            if (wl_display.dispatch() != .SUCCESS) unreachable;
         }
 
         if (pollfds[2].revents & posix.POLL.IN != 0) {
