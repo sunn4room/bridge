@@ -133,6 +133,7 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
             if (self.link.next == &self.link) {
                 self.window_manager.windows.append(self);
                 self.pre();
+                self.window_manager.river_window_manager.manageDirty();
             }
         },
         else => {

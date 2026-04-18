@@ -298,7 +298,7 @@ pub fn manage(self: *Self) void {
                             window.area = area;
                         },
                     }
-                    log.debug(
+                    log.info(
                         "{f} operated {f}: {}, {}, {}, {}",
                         .{
                             self,

@@ -146,7 +146,7 @@ pub fn manage(self: *Self) void {
                     window.river_node.setPosition(area.x, area.y);
                     window.river_window.proposeDimensions(area.w, area.h);
                     window.area = area;
-                    log.debug(
+                    log.info(
                         "{f} layout {f}: {}, {}, {}, {}",
                         .{
                             self,
