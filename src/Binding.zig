@@ -168,7 +168,7 @@ fn execute(self: *Self) void {
             }
         },
         .spawn => |cmd| {
-            util.spawn(cmd, self.allocator);
+            util.spawn(cmd, self.allocator) catch {};
         },
         .iterate_window_weight => |dir| {
             if (seat.focused) |window| {

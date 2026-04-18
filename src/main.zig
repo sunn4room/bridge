@@ -48,6 +48,7 @@ pub fn main() void {
     window_manager.startup();
 
     while (window_manager.running) {
+        log.debug("------------------------------ line ------------------------------", .{});
         if (wl_display.flush() != .SUCCESS) unreachable;
         _ = posix.poll(&pollfds, -1) catch unreachable;
 

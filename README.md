@@ -56,7 +56,6 @@ river -c bridge
 > - swaybg
 > - swaylock
 > - wl-clip-persist
-> - wob
 
 ## How to config Bridge?
 
