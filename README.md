@@ -31,8 +31,7 @@ A horizontal-tiling window manager based on [river](https://codeberg.org/river/r
 
 ### Dependencies
 
-- wayland
-- xkbcommon
+- river
 - fcft
 - pixman
 - zig (build)

@@ -56,7 +56,7 @@ pub fn create(window_manager: *WindowManager, river_window: *river.WindowV1) *Se
     river_window.setListener(*Self, river_window_listener, self);
     self.link.init();
 
-    self.changeConfig(&self.window_manager.configw.?.config);
+    self.changeConfig(self.window_manager.config);
 
     log.debug("{f} has been created.", .{self});
     return self;

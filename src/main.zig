@@ -80,7 +80,7 @@ pub fn main() !void {
                 const event: *linux.inotify_event = @ptrCast(@alignCast(buffer[offset .. offset + event_size]));
                 if (event.getName()) |name| {
                     if (std.mem.orderZ(u8, name, "bridge.zon") == .eq) {
-                        window_manager.updateConfig();
+                        window_manager.reloadConfig();
                         window_manager.river_window_manager.manageDirty();
                     }
                 }

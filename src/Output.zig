@@ -40,9 +40,9 @@ pub fn create(window_manager: *WindowManager, river_output: *river.OutputV1) *Se
     self.river_layer_shell_output.setListener(*Self, river_layer_shell_output_listener, self);
     self.link.init();
 
-    self.changeConfig(&self.window_manager.configw.?.config);
-
     self.bar = Bar.create(self);
+
+    self.changeConfig(self.window_manager.config);
 
     log.debug("{f} has been created.", .{self});
     return self;
@@ -192,6 +192,7 @@ pub fn changeView(self: *Self, view: u4) ?*Window {
 pub fn changeConfig(self: *Self, config: *const Config) void {
     self.config = config;
     self.dirty = true;
+    self.bar.changeConfig(config);
 }
 
 pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {

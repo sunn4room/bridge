@@ -3,114 +3,18 @@ const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const river = wayland.client.river;
 const Modifiers = river.SeatV1.Modifiers;
+const xkbcommon = @import("xkbcommon");
 
 const util = @import("util.zig");
 const log = util.log;
 const Seat = @import("Seat.zig");
-
-pub const Mapper = struct {
-    modifiers: river.SeatV1.Modifiers,
-    trigger: union(enum) {
-        keysym: enum(u32) {
-            F1 = 0xffbe,
-            F2 = 0xffbf,
-            F3 = 0xffc0,
-            F4 = 0xffc1,
-            F5 = 0xffc2,
-            F6 = 0xffc3,
-            F7 = 0xffc4,
-            F8 = 0xffc5,
-            F9 = 0xffc6,
-            F10 = 0xffc7,
-            F11 = 0xffc8,
-            @"0" = 0x0030,
-            @"1" = 0x0031,
-            @"2" = 0x0032,
-            @"3" = 0x0033,
-            @"4" = 0x0034,
-            @"5" = 0x0035,
-            @"6" = 0x0036,
-            @"7" = 0x0037,
-            @"8" = 0x0038,
-            @"9" = 0x0039,
-            a = 0x0061,
-            b = 0x0062,
-            c = 0x0063,
-            d = 0x0064,
-            e = 0x0065,
-            f = 0x0066,
-            g = 0x0067,
-            h = 0x0068,
-            i = 0x0069,
-            j = 0x006a,
-            k = 0x006b,
-            l = 0x006c,
-            m = 0x006d,
-            n = 0x006e,
-            o = 0x006f,
-            p = 0x0070,
-            q = 0x0071,
-            r = 0x0072,
-            s = 0x0073,
-            t = 0x0074,
-            u = 0x0075,
-            v = 0x0076,
-            w = 0x0077,
-            x = 0x0078,
-            y = 0x0079,
-            z = 0x007a,
-            Escape = 0xff1b,
-            Tab = 0xff09,
-            BackSpace = 0xff08,
-            Return = 0xff0d,
-            grave = 0x0060,
-            minus = 0x002d,
-            equal = 0x003d,
-            bracketleft = 0x005b,
-            bracketright = 0x005d,
-            backslash = 0x005c,
-            semicolon = 0x003b,
-            apostrophe = 0x0027,
-            comma = 0x002c,
-            period = 0x002e,
-            slash = 0x002f,
-            space = 0x0020,
-        },
-        button: enum(u32) {
-            left = 0x110,
-            right = 0x111,
-        },
-    },
-    action: union(enum) {
-        reload_config,
-        toggle_passthrough,
-        spawn: []const []const u8,
-        iterate_window_weight: wl.list.Direction,
-        iterate_window_focus: wl.list.Direction,
-        iterate_sticky_window_focus: wl.list.Direction,
-        iterate_window_order: wl.list.Direction,
-        iterate_sticky_window_order: wl.list.Direction,
-        iterate_output_focus: wl.list.Direction,
-        iterate_window_output: wl.list.Direction,
-        change_window_focus: u32,
-        change_window_weight: u4,
-        change_output_view: u4,
-        close_window,
-        toggle_window_sticky,
-        toggle_window_fullscreen,
-        enable_window_floating,
-        disable_window_floating,
-        show_window_info,
-        quit,
-    },
-    allow_when_locked: bool = false,
-};
+const Config = @import("Config.zig");
 
 const Self = @This();
 
 allocator: std.mem.Allocator,
 seat: *Seat,
-mapper: *const Mapper,
+map: *const Config.Map,
 river_binding: union(enum) {
     xkb: *river.XkbBindingV1,
     pointer: *river.PointerBindingV1,
@@ -121,22 +25,22 @@ enabled: bool = false,
 toggle: bool = false,
 locked: bool = false,
 
-pub fn create(seat: *Seat, mapper: *const Mapper) *Self {
+pub fn create(seat: *Seat, map: *const Config.Map) *Self {
     const self = seat.allocator.create(Self) catch unreachable;
     self.* = .{
         .allocator = seat.allocator,
         .seat = seat,
-        .mapper = mapper,
+        .map = map,
     };
 
-    switch (mapper.trigger) {
+    switch (map.trigger) {
         .keysym => |keysym| {
-            const river_xkb_binding = seat.window_manager.river_xkb_bindings.getXkbBinding(seat.river_seat, @intFromEnum(keysym), mapper.modifiers) catch unreachable;
+            const river_xkb_binding = seat.window_manager.river_xkb_bindings.getXkbBinding(seat.river_seat, @intFromEnum(xkbcommon.Keysym.fromName(keysym, .no_flags)), map.modifiers) catch unreachable;
             river_xkb_binding.setListener(*Self, river_xkb_binding_listener, self);
             self.river_binding = .{ .xkb = river_xkb_binding };
         },
         .button => |button| {
-            const river_pointer_binding = seat.river_seat.getPointerBinding(@intFromEnum(button), mapper.modifiers) catch unreachable;
+            const river_pointer_binding = seat.river_seat.getPointerBinding(@intFromEnum(button), map.modifiers) catch unreachable;
             river_pointer_binding.setListener(*Self, river_pointer_binding_listener, self);
             self.river_binding = .{ .pointer = river_pointer_binding };
         },
@@ -225,9 +129,9 @@ pub fn update_enabled(self: *Self) void {
 fn execute(self: *Self) void {
     const seat = self.seat;
     const window_manager = seat.window_manager;
-    switch (self.mapper.action) {
+    switch (self.map.action) {
         .reload_config => {
-            self.seat.window_manager.updateConfig();
+            self.seat.window_manager.reloadConfig();
         },
         .toggle_passthrough => {
             var binding_iterator = seat.bindings.iterator(.forward);

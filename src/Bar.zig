@@ -55,7 +55,6 @@ pub fn create(output: *Output) *Self {
     self.river_node = self.river_shell_surface.getNode() catch unreachable;
 
     self.scale = 120;
-    self.changeConfig(self.output.config);
 
     log.debug("{f} has been created.", .{self});
     return self;
