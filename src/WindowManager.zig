@@ -77,7 +77,7 @@ pub fn startup(self: *Self) void {
     } else if (self.river_layer_shell_name == null) {
         log.err("Global object 'river_layer_shell' is missing.", .{});
     } else {
-        for (config.startup_cmds) |cmd| util.spawn(cmd, self.allocator) catch {};
+        for (config.startup_cmds) |cmd| util.spawn(cmd) catch {};
         self.river_window_manager.setListener(*Self, river_window_manager_listener, self);
 
         self.running = true;

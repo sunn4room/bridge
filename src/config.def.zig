@@ -127,5 +127,6 @@ pub const mappers = [_]Binding.Mapper{
     .{ .modifiers = mod______, .trigger = .{ .keysym = .a }, .action = .toggle_window_fullscreen },
     .{ .modifiers = mod______, .trigger = .{ .button = .left }, .action = .enable_window_floating },
     .{ .modifiers = mod______, .trigger = .{ .button = .right }, .action = .disable_window_floating },
+    .{ .modifiers = mod______, .trigger = .{ .keysym = .i }, .action = .show_window_info },
     .{ .modifiers = mod_shift, .trigger = .{ .keysym = .Escape }, .action = .quit },
 };

@@ -21,6 +21,9 @@ link: wl.list.Link = undefined,
 placed: ?*Output = null,
 area: Rect = undefined,
 buttons: [2]Rect = undefined,
+app_id: ?[]const u8 = null,
+title: ?[]const u8 = null,
+parent: ?*Self = null,
 icon: [*:0]const u8 = config.app_icon_fallback,
 close: bool = false,
 weight: u4 = 5,
@@ -70,6 +73,11 @@ pub fn pre(self: *Self) void {
     self.place(output);
     var seat_iterator = self.window_manager.seats.iterator(.forward);
     while (seat_iterator.next()) |seat| seat.focus(self);
+
+    if (self.parent) |parent| {
+        parent.switchSticky(true);
+        self.switchFloating(true);
+    }
 }
 
 pub fn post(self: *Self) void {
@@ -93,6 +101,8 @@ pub fn destroy(self: *Self) void {
     self.link.remove();
     self.river_node.destroy();
     self.river_window.destroy();
+    if (self.app_id) |app_id| self.allocator.free(app_id);
+    if (self.title) |title| self.allocator.free(title);
     self.allocator.destroy(self);
 }
 
@@ -116,6 +126,23 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
         },
         .app_id => |data| {
             self.changeIcon(data.app_id);
+            if (self.app_id) |app_id| self.allocator.free(app_id);
+            self.app_id = null;
+            if (data.app_id) |new_app_id| {
+                self.app_id = self.allocator.dupe(u8, std.mem.span(new_app_id)) catch unreachable;
+            }
+        },
+        .title => |data| {
+            if (self.title) |title| self.allocator.free(title);
+            self.title = null;
+            if (data.title) |new_title| {
+                self.title = self.allocator.dupe(u8, std.mem.span(new_title)) catch unreachable;
+            }
+        },
+        .parent => |data| {
+            if (data.parent) |parent| {
+                self.parent = @ptrCast(@alignCast(parent.getUserData().?));
+            }
         },
         .pointer_move_requested => |data| {
             if (data.seat) |river_seat| {
@@ -129,8 +156,10 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
                 seat.resize(self, data.edges);
             }
         },
-        .dimensions => {
+        .dimensions => |data| {
             if (self.link.next == &self.link) {
+                self.area.w = data.width;
+                self.area.h = data.height;
                 self.window_manager.windows.append(self);
                 self.pre();
                 self.window_manager.river_window_manager.manageDirty();
@@ -177,6 +206,26 @@ pub fn manage(self: *Self) void {
         self.visible_updated = false;
         if (self.visible) {
             self.river_window.show();
+            if (self.parent != null) {
+                self.parent = null;
+                const output = self.placed.?;
+                if (self.area.w > output.area.w) self.area.w = output.area.w;
+                if (self.area.h > output.area.h) self.area.h = output.area.h;
+                self.area.x = output.area.x + @divFloor(output.area.w - self.area.w, 2);
+                self.area.y = output.area.y + @divFloor(output.area.h - self.area.h, 2);
+                self.river_node.setPosition(self.area.x, self.area.y);
+                self.river_window.proposeDimensions(self.area.w, self.area.h);
+                log.info(
+                    "{f} is a child window: {}, {}, {}, {}",
+                    .{
+                        self,
+                        self.area.x,
+                        self.area.y,
+                        self.area.w,
+                        self.area.h,
+                    },
+                );
+            }
         } else {
             self.river_window.hide();
         }

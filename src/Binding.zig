@@ -36,6 +36,7 @@ pub const Mapper = struct {
         toggle_window_fullscreen,
         enable_window_floating,
         disable_window_floating,
+        show_window_info,
         quit,
     },
     allow_when_locked: bool = false,
@@ -168,7 +169,7 @@ fn execute(self: *Self) void {
             }
         },
         .spawn => |cmd| {
-            util.spawn(cmd, self.allocator) catch {};
+            util.spawn(cmd) catch {};
         },
         .iterate_window_weight => |dir| {
             if (seat.focused) |window| {
@@ -312,6 +313,16 @@ fn execute(self: *Self) void {
             if (seat.hovered) |window| {
                 seat.focus(window);
                 window.switchFloating(false);
+            }
+        },
+        .show_window_info => {
+            if (seat.focused) |window| {
+                const info = std.fmt.allocPrintSentinel(self.allocator, "appid: {s}\ntitle: {s}", .{
+                    if (window.app_id) |app_id| app_id else "",
+                    if (window.title) |title| title else "",
+                }, 0) catch unreachable;
+                defer self.allocator.free(info);
+                util.spawn(&.{"notify-send", "Window Info", info}) catch {};
             }
         },
         .quit => {

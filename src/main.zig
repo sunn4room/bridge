@@ -29,7 +29,7 @@ pub fn main() void {
     var mask = posix.sigemptyset();
     posix.sigaddset(&mask, posix.SIG.TERM);
     posix.sigprocmask(posix.SIG.BLOCK, &mask, null);
-    const sig_fd = posix.signalfd(-1, &mask, @as(u32, @bitCast(posix.O{ .CLOEXEC = true }))) catch unreachable;
+    const sig_fd = posix.signalfd(-1, &mask, 0) catch unreachable;
     defer posix.close(sig_fd);
 
     var pollfds = [2]posix.pollfd{
@@ -48,7 +48,6 @@ pub fn main() void {
     window_manager.startup();
 
     while (window_manager.running) {
-        log.debug("------------------------------ line ------------------------------", .{});
         if (wl_display.flush() != .SUCCESS) unreachable;
         _ = posix.poll(&pollfds, -1) catch unreachable;
 

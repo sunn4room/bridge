@@ -62,20 +62,20 @@ pub const Rect = struct {
     }
 };
 
-pub fn spawn(command: []const []const u8, allocator: std.mem.Allocator) !void {
-    const child = try allocator.create(std.process.Child);
-    errdefer allocator.destroy(child);
+pub fn spawn(command: []const []const u8) !void {
+    const child = try std.heap.c_allocator.create(std.process.Child);
+    errdefer std.heap.c_allocator.destroy(child);
 
-    child.* = std.process.Child.init(command, allocator);
+    child.* = std.process.Child.init(command, std.heap.c_allocator);
     try child.spawn();
 
-    const thread = try std.Thread.spawn(.{}, wait, .{ child, allocator });
+    const thread = try std.Thread.spawn(.{}, wait, .{child});
     thread.detach();
 }
 
-fn wait(child: *std.process.Child, allocator: std.mem.Allocator) void {
+fn wait(child: *std.process.Child) void {
     _ = child.wait() catch {};
-    allocator.destroy(child);
+    std.heap.c_allocator.destroy(child);
 }
 
 pub fn getFont(dpi: i32) *fcft.Font {
