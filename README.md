@@ -15,14 +15,14 @@ A horizontal-tiling window manager based on [river](https://codeberg.org/river/r
 
 ## Why Bridge?
 
-- Bridge is Lightweight. Bridge has 2000+ lines of zig source code.
-- Bridge is Minimalist. The people who advocate for minimalist workflows might like the horizontal-tiling layout.
-- Bridge is Attention-friendly. You should focus on whether the window is sticky, not on where the window is placed.
+- Bridge is Lightweight. Bridge has 2500+ lines of zig source code.
+- Bridge is Minimalist. This project is written for people who like a minimalist style.
+- Bridge is Attention-friendly. You should focus on which windows should be displayed, rather than where the windows should be placed.
 - Bridge has Built-in status bar. The bar is used to show the informations about views, windows and weights.
 
 ## Why not Bridge?
 
-- Bridge is customized through editing its source code.
+- Bridge is not interested in advanced features, such as animations.
 - Bridge becomes very ugly when tiling 3+ windows.
 - Bridge is not good at managing 10+ windows.
 - Bridge built-in bar only displays icons, not other information such as the time and date.
@@ -59,4 +59,7 @@ river -c bridge
 
 ## How to config Bridge?
 
-Edit the `src/config.zig` and re-build.
+Copy `src/bridge.zon` to `$XDG_CONFIG_HOME/river/bridge.zon` or `$HOME/.config/river/bridge.zon`, and customize it.
+
+- if `$XDG_CONFIG_HOME/river` is exists, bridge will automatically reload `bridge.zon` when it is modified.
+- bridge support `reload_config` action. The default keymap is `mod4+r`.

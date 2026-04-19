@@ -2,9 +2,15 @@ const std = @import("std");
 const fcft = @import("fcft");
 const pixman = @import("pixman");
 
-const config = @import("config.zig");
-
 pub const log = std.log.scoped(.bridge);
+
+pub fn getEnv(allocator: std.mem.Allocator, name: []const u8) ?[]u8 {
+    return std.process.getEnvVarOwned(allocator, name) catch |err| {
+        if (err == error.EnvironmentVariableNotFound) {
+            return null;
+        } else unreachable;
+    };
+}
 
 pub const Color = struct {
     r: u32,
@@ -24,10 +30,10 @@ pub fn getColor(u: u32) Color {
 
 pub fn getPixmanColor(u: u32) pixman.Color {
     return .{
-        .red = ((u >> 24) & 0xff) * 0x0101,
-        .green = ((u >> 16) & 0xff) * 0x0101,
-        .blue = ((u >> 8) & 0xff) * 0x0101,
-        .alpha = (u & 0xff) * 0x0101,
+        .red = @intCast(((u >> 24) & 0xff) * 0x0101),
+        .green = @intCast(((u >> 16) & 0xff) * 0x0101),
+        .blue = @intCast(((u >> 8) & 0xff) * 0x0101),
+        .alpha = @intCast((u & 0xff) * 0x0101),
     };
 }
 
@@ -78,8 +84,8 @@ fn wait(child: *std.process.Child) void {
     std.heap.c_allocator.destroy(child);
 }
 
-pub fn getFont(dpi: i32) *fcft.Font {
-    var names: [1][*:0]const u8 = .{config.font_name};
+pub fn getFont(name: [*:0]const u8, dpi: i32) *fcft.Font {
+    var names: [1][*:0]const u8 = .{name};
     const names_len: usize = 1;
     if (dpi > 999) unreachable;
     if (dpi < 0) unreachable;

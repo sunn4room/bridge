@@ -37,10 +37,6 @@ pub fn build(b: *std.Build) void {
     mainModule.addImport("wayland", waylandModule);
     exe.linkSystemLibrary("wayland-client");
 
-    const xkbcommonModule = b.dependency("xkbcommon", .{}).module("xkbcommon");
-    mainModule.addImport("xkbcommon", xkbcommonModule);
-    exe.linkSystemLibrary("xkbcommon");
-
     const pixmanModule = b.dependency("pixman", .{}).module("pixman");
     mainModule.addImport("pixman", pixmanModule);
     exe.linkSystemLibrary("pixman-1");
@@ -48,15 +44,4 @@ pub fn build(b: *std.Build) void {
     const fcftModule = b.dependency("fcft", .{}).module("fcft");
     mainModule.addImport("fcft", fcftModule);
     exe.linkSystemLibrary("fcft");
-
-    const config_file = "src/config.zig";
-    const backup_config_file = "src/config.def.zig";
-    const project_dir = b.build_root.handle;
-    project_dir.access(config_file, .{}) catch |err| switch (err) {
-        error.FileNotFound => {
-            project_dir.copyFile(backup_config_file, project_dir, config_file, .{}) catch unreachable;
-            std.log.info("{s} -> {s}", .{ backup_config_file, config_file });
-        },
-        else => unreachable,
-    };
 }

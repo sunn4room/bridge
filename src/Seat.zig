@@ -3,7 +3,7 @@ const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const river = wayland.client.river;
 
-const config = @import("config.zig");
+const Config = @import("Config.zig");
 const util = @import("util.zig");
 const log = util.log;
 const Rect = util.Rect;
@@ -48,6 +48,7 @@ window_manager: *WindowManager,
 river_seat: *river.SeatV1,
 river_layer_shell_seat: *river.LayerShellSeatV1,
 link: wl.list.Link = undefined,
+config: *const Config = undefined,
 bindings: wl.list.Head(Binding, .link) = undefined,
 layer_focus: LayerFocus = .none,
 hovered: ?*Window = null,
@@ -93,11 +94,7 @@ pub fn create(window_manager: *WindowManager, river_seat: *river.SeatV1) *Self {
     self.river_layer_shell_seat.setListener(*Self, river_layer_shell_seat_listener, self);
     self.link.init();
     self.bindings.init();
-    for (&config.mappers) |*mapper| {
-        const binding = Binding.create(self, mapper);
-        self.bindings.append(binding);
-        binding.switchToggle(true);
-    }
+    self.changeConfig(&self.window_manager.configw.?.config);
 
     log.debug("{f} has been created.", .{self});
     return self;
@@ -386,6 +383,23 @@ pub fn cancel(self: *Self, window_or_null: ?*Window) void {
         }
         operation.state = .stopped;
         self.operation_updated = true;
+    }
+}
+
+pub fn changeConfig(self: *Self, config: *const Config) void {
+    self.config = config;
+    self.updateBindings();
+}
+
+pub fn updateBindings(self: *Self) void {
+    var binding_iterator = self.bindings.iterator(.forward);
+    while (binding_iterator.next()) |binding| binding.destroy();
+
+    const map = if (self.config.map) |map| map else Config.default.map.?;
+    for (map) |*mapper| {
+        const binding = Binding.create(self, mapper);
+        self.bindings.append(binding);
+        binding.switchToggle(true);
     }
 }
 

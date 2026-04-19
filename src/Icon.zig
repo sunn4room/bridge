@@ -33,7 +33,7 @@ pub fn create(bar: *Bar, key: [*:0]const u8) *Self {
     defer self.allocator.free(codepoints);
     var i: usize = 0;
     while (codepoint_iterator.nextCodepoint()) |cp| : (i += 1) codepoints[i] = cp;
-    self.run = bar.font.rasterizeTextRunUtf32(codepoints, .default) catch unreachable;
+    self.run = bar.font.?.rasterizeTextRunUtf32(codepoints, .default) catch unreachable;
     for (self.run.glyphs, 0..self.run.count) |glyph, _| self.width += @intCast(glyph.advance.x);
 
     log.debug("{f} has been created.", .{self});

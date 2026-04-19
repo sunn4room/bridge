@@ -4,6 +4,3 @@ zig-out/
 build/
 build-*/
 docgen_tmp/
-
-/src/config.zig
-/src/config.zig.bak

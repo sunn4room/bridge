@@ -4,7 +4,6 @@ const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const pixman = @import("pixman");
 
-const config = @import("config.zig");
 const util = @import("util.zig");
 const log = util.log;
 const Bar = @import("Bar.zig");
@@ -76,11 +75,11 @@ fn wl_buffer_listener(_: *wl.Buffer, event: wl.Buffer.Event, self: *Self) void {
     }
 }
 
-pub fn prepare(self: *Self) void {
+pub fn prepare(self: *Self, background: *const pixman.Color) void {
     _ = pixman.Image.fillRectangles(
         .src,
         self.image,
-        &config.bar_background,
+        background,
         1,
         &[1]pixman.Rectangle16{.{
             .x = 0,

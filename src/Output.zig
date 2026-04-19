@@ -3,7 +3,7 @@ const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const river = wayland.client.river;
 
-const config = @import("config.zig");
+const Config = @import("Config.zig");
 const util = @import("util.zig");
 const log = util.log;
 const Rect = util.Rect;
@@ -19,6 +19,7 @@ window_manager: *WindowManager,
 river_output: *river.OutputV1,
 river_layer_shell_output: *river.LayerShellOutputV1,
 link: wl.list.Link = undefined,
+config: *const Config = undefined,
 area: Rect = undefined,
 view: u4 = 1,
 buttons: [10]Rect = undefined,
@@ -38,6 +39,8 @@ pub fn create(window_manager: *WindowManager, river_output: *river.OutputV1) *Se
     self.river_output.setListener(*Self, river_output_listener, self);
     self.river_layer_shell_output.setListener(*Self, river_layer_shell_output_listener, self);
     self.link.init();
+
+    self.changeConfig(&self.window_manager.configw.?.config);
 
     self.bar = Bar.create(self);
 
@@ -134,15 +137,17 @@ pub fn manage(self: *Self) void {
             window_iterator = self.window_manager.windows.iterator(.forward);
             while (window_iterator.next()) |window| {
                 if (window.placed == self and window.visible and !window.floating) {
+                    const border_gap: i32 = if (self.config.border_gap) |border_gap| border_gap else Config.default.border_gap.?;
+                    const border_width: i32 = if (self.config.border_width) |border_width| border_width else Config.default.border_width.?;
+
                     var area: Rect = undefined;
-                    const gap: i32 = config.layout_gap;
-                    const total_width: i32 = self.area.w - gap;
+                    const total_width: i32 = self.area.w - border_gap;
                     const occupied_width: i32 = @divFloor(total_width * occupied_weight, total_weight);
                     const window_width: i32 = @divFloor(total_width * window.weight, total_weight);
-                    area.x = self.area.x + gap + occupied_width + config.border_width;
-                    area.y = self.area.y + self.window_manager.bar_height + gap + config.border_width;
-                    area.w = window_width - gap - 2 * config.border_width;
-                    area.h = self.area.h - self.window_manager.bar_height - 2 * gap - 2 * config.border_width;
+                    area.x = self.area.x + border_gap + occupied_width + border_width;
+                    area.y = self.area.y + self.window_manager.bar_height + border_gap + border_width;
+                    area.w = window_width - border_gap - 2 * border_width;
+                    area.h = self.area.h - self.window_manager.bar_height - 2 * border_gap - 2 * border_width;
                     window.river_node.setPosition(area.x, area.y);
                     window.river_window.proposeDimensions(area.w, area.h);
                     window.area = area;
@@ -182,6 +187,11 @@ pub fn changeView(self: *Self, view: u4) ?*Window {
         }
     }
     return sticky_window_or_null;
+}
+
+pub fn changeConfig(self: *Self, config: *const Config) void {
+    self.config = config;
+    self.dirty = true;
 }
 
 pub fn format(self: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {

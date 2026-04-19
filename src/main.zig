@@ -1,5 +1,6 @@
 const std = @import("std");
 const posix = std.posix;
+const linux = std.os.linux;
 const builtin = @import("builtin");
 const wayland = @import("wayland");
 const wl = wayland.client.wl;
@@ -8,7 +9,7 @@ const util = @import("util.zig");
 const log = util.log;
 const WindowManager = @import("WindowManager.zig");
 
-pub fn main() void {
+pub fn main() !void {
     const wl_display = wl.Display.connect(null) catch {
         log.err("Failed to connect to wayland display.", .{});
         return;
@@ -23,16 +24,20 @@ pub fn main() void {
     const window_manager = WindowManager.create(allocator, wl_display);
     defer window_manager.destroy();
 
-    const wl_fd = wl_display.getFd();
+    const wl_fd: i32 = @intCast(wl_display.getFd());
     defer posix.close(wl_fd);
 
     var mask = posix.sigemptyset();
     posix.sigaddset(&mask, posix.SIG.TERM);
     posix.sigprocmask(posix.SIG.BLOCK, &mask, null);
-    const sig_fd = posix.signalfd(-1, &mask, 0) catch unreachable;
+    const sig_fd: i32 = posix.signalfd(-1, &mask, 0) catch unreachable;
     defer posix.close(sig_fd);
 
-    var pollfds = [2]posix.pollfd{
+    const ntf_fd: i32 = @intCast(linux.inotify_init1(0));
+    _ = linux.inotify_add_watch(ntf_fd, window_manager.river_home, linux.IN.CLOSE_WRITE | linux.IN.MOVED_TO);
+    defer posix.close(ntf_fd);
+
+    var pollfds = [3]posix.pollfd{
         .{
             .fd = wl_fd,
             .events = posix.POLL.IN,
@@ -40,6 +45,11 @@ pub fn main() void {
         },
         .{
             .fd = sig_fd,
+            .events = posix.POLL.IN,
+            .revents = 0,
+        },
+        .{
+            .fd = ntf_fd,
             .events = posix.POLL.IN,
             .revents = 0,
         },
@@ -57,6 +67,24 @@ pub fn main() void {
 
         if (pollfds[1].revents & posix.POLL.IN != 0) {
             window_manager.running = false;
+        }
+
+        if (pollfds[2].revents & posix.POLL.IN != 0) {
+            var buffer: [1024]u8 = undefined;
+            const read = try posix.read(ntf_fd, &buffer);
+
+            var offset: usize = 0;
+            while (offset < read) {
+                const event_size = @sizeOf(linux.inotify_event);
+                const event: *linux.inotify_event = @ptrCast(@alignCast(buffer[offset .. offset + event_size]));
+                if (event.getName()) |name| {
+                    if (std.mem.orderZ(u8, name, "bridge.zon") == .eq) {
+                        window_manager.updateConfig();
+                        window_manager.river_window_manager.manageDirty();
+                    }
+                }
+                offset += @sizeOf(linux.inotify_event) + event.len;
+            }
         }
     }
 }

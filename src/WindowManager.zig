@@ -5,12 +5,13 @@ const wp = wayland.client.wp;
 const river = wayland.client.river;
 const fcft = @import("fcft");
 
-const config = @import("config.zig");
+const Config = @import("Config.zig");
 const util = @import("util.zig");
 const log = util.log;
 const Seat = @import("Seat.zig");
 const Window = @import("Window.zig");
 const Output = @import("Output.zig");
+const Bar = @import("Bar.zig");
 
 const Self = @This();
 
@@ -30,6 +31,9 @@ river_xkb_bindings: *river.XkbBindingsV1 = undefined,
 river_xkb_bindings_name: ?u32 = null,
 river_layer_shell: *river.LayerShellV1 = undefined,
 river_layer_shell_name: ?u32 = null,
+river_home: [:0]const u8 = undefined,
+bridge_zon: []const u8 = undefined,
+configw: ?*Config.ConfigW = null,
 seats: wl.list.Head(Seat, .link) = undefined,
 windows: wl.list.Head(Window, .link) = undefined,
 unavailable_windows: wl.list.Head(Window, .link) = undefined,
@@ -44,14 +48,23 @@ pub fn create(allocator: std.mem.Allocator, wl_display: *wl.Display) *Self {
     const self = allocator.create(Self) catch unreachable;
     self.* = .{ .allocator = allocator };
 
+    const xdg_config_home_or_null = util.getEnv(allocator, "XDG_CONFIG_HOME");
+    const config_home = if (xdg_config_home_or_null) |xdg_config_home| xdg_config_home else blk: {
+        const home = util.getEnv(allocator, "HOME").?;
+        defer allocator.free(home);
+        break :blk std.fmt.allocPrint(allocator, "{s}/.config", .{home}) catch unreachable;
+    };
+    defer allocator.free(config_home);
+
+    self.river_home = std.fmt.allocPrintSentinel(allocator, "{s}/river", .{config_home}, 0) catch unreachable;
+    self.bridge_zon = std.fmt.allocPrint(allocator, "{s}/bridge.zon", .{self.river_home}) catch unreachable;
+
     self.seats.init();
     self.windows.init();
     self.unavailable_windows.init();
     self.outputs.init();
 
-    const basic_font = util.getFont(120);
-    defer basic_font.destroy();
-    self.bar_height = @intCast(basic_font.height);
+    self.updateConfig();
 
     self.wl_registry = wl_display.getRegistry() catch unreachable;
     self.wl_registry.setListener(*Self, wl_registry_listener, self);
@@ -77,7 +90,8 @@ pub fn startup(self: *Self) void {
     } else if (self.river_layer_shell_name == null) {
         log.err("Global object 'river_layer_shell' is missing.", .{});
     } else {
-        for (config.startup_cmds) |cmd| util.spawn(cmd) catch {};
+        const cmd_startup = if (self.configw.?.config.cmd_startup) |cmd_startup| cmd_startup else Config.default.cmd_startup.?;
+        for (cmd_startup) |cmd| util.spawn(cmd) catch {};
         self.river_window_manager.setListener(*Self, river_window_manager_listener, self);
 
         self.running = true;
@@ -96,6 +110,8 @@ pub fn destroy(self: *Self) void {
     var output_iterator = self.outputs.iterator(.forward);
     while (output_iterator.next()) |output| output.destroy();
 
+    if (self.configw) |configw| configw.destroy();
+
     if (self.river_layer_shell_name != null) self.river_layer_shell.destroy();
     if (self.river_xkb_bindings_name != null) self.river_xkb_bindings.destroy();
     if (self.river_window_manager_name != null) self.river_window_manager.destroy();
@@ -105,8 +121,10 @@ pub fn destroy(self: *Self) void {
     if (self.wl_compositor_name != null) self.wl_compositor.destroy();
 
     self.wl_registry.destroy();
-    fcft.fini();
+    self.allocator.free(self.river_home);
+    self.allocator.free(self.bridge_zon);
     self.allocator.destroy(self);
+    fcft.fini();
 }
 
 fn wl_registry_listener(_: *wl.Registry, event: wl.Registry.Event, self: *Self) void {
@@ -230,6 +248,42 @@ fn river_window_manager_listener(_: *river.WindowManagerV1, event: river.WindowM
             }
         },
     }
+}
+
+pub fn updateConfig(self: *Self) void {
+    const old_configw_or_null = self.configw;
+
+    const configw = Config.ConfigW.create(self.allocator, self.bridge_zon);
+    self.configw = configw;
+    self.updateBarHeight();
+
+    Window.border_normal = util.getColor(if (configw.config.color_selection) |color_selection| color_selection else Config.default.color_selection.?);
+    Window.border_focused = util.getColor(if (configw.config.color_theme) |color_theme| color_theme else Config.default.color_theme.?);
+    Window.border_sticky = util.getColor(if (configw.config.color_foreground) |color_foreground| color_foreground else Config.default.color_foreground.?);
+
+    Bar.bar_background = util.getPixmanColor(if (configw.config.color_background) |color_background| color_background else Config.default.color_background.?);
+    Bar.bar_foreground = util.getPixmanColor(if (configw.config.color_foreground) |color_foreground| color_foreground else Config.default.color_foreground.?);
+    Bar.bar_selection = util.getPixmanColor(if (configw.config.color_selection) |color_selection| color_selection else Config.default.color_selection.?);
+    Bar.bar_theme = util.getPixmanColor(if (configw.config.color_theme) |color_theme| color_theme else Config.default.color_theme.?);
+
+    var seat_iterator = self.seats.iterator(.forward);
+    while (seat_iterator.next()) |seat| seat.changeConfig(&configw.config);
+    var window_iterator = self.windows.iterator(.forward);
+    while (window_iterator.next()) |window| window.changeConfig(&configw.config);
+    var output_iterator = self.outputs.iterator(.forward);
+    while (output_iterator.next()) |output| {
+        output.changeConfig(&configw.config);
+        output.bar.changeConfig(&configw.config);
+    }
+
+    if (old_configw_or_null) |old_configw| old_configw.destroy();
+}
+
+pub fn updateBarHeight(self: *Self) void {
+    const bar_font = if (self.configw.?.config.bar_font) |bar_font| bar_font else Config.default.bar_font.?;
+    const font = util.getFont(bar_font.ptr, 120);
+    defer font.destroy();
+    self.bar_height = @intCast(font.height);
 }
 
 pub fn format(_: *Self, writer: *std.Io.Writer) std.Io.Writer.Error!void {

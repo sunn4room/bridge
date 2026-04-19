@@ -10,10 +10,6 @@
             .url = "https://codeberg.org/river/river/archive/v0.4.1.tar.gz",
             .hash = "river-0.4.1-_G6Njv-nCwBebH8tw6eZ3ERv05GLjVkzpFzRGsnpfzgG",
         },
-        .xkbcommon = .{
-            .url = "https://codeberg.org/ifreund/zig-xkbcommon/archive/v0.4.0.tar.gz",
-            .hash = "xkbcommon-0.4.0-VDqIe0i2AgDRsok2GpMFYJ8SVhQS10_PI2M_CnHXsJJZ",
-        },
         .@"wayland-protocols" = .{
             .url = "https://gitlab.freedesktop.org/wayland/wayland-protocols/-/archive/1.47/wayland-protocols-1.47.tar.gz",
             .hash = "N-V-__8AAFdWDwA0ktbNUi9pFBHCRN4weXIgIfCrVjfGxqgA",

@@ -3,13 +3,17 @@ const wayland = @import("wayland");
 const wl = wayland.client.wl;
 const river = wayland.client.river;
 
-const config = @import("config.zig");
+const Config = @import("Config.zig");
 const util = @import("util.zig");
 const log = util.log;
 const Rect = util.Rect;
 const WindowManager = @import("WindowManager.zig");
 const Output = @import("Output.zig");
 const Seat = @import("Seat.zig");
+
+pub var border_normal: util.Color = undefined;
+pub var border_focused: util.Color = undefined;
+pub var border_sticky: util.Color = undefined;
 
 const Self = @This();
 
@@ -18,20 +22,21 @@ window_manager: *WindowManager,
 river_window: *river.WindowV1,
 river_node: *river.NodeV1,
 link: wl.list.Link = undefined,
+config: *const Config = undefined,
 placed: ?*Output = null,
 area: Rect = undefined,
 buttons: [2]Rect = undefined,
-app_id: ?[]const u8 = null,
-title: ?[]const u8 = null,
+app_id: ?[:0]const u8 = null,
+title: ?[:0]const u8 = null,
 parent: ?*Self = null,
-icon: [*:0]const u8 = config.app_icon_fallback,
+icon: [*:0]const u8 = undefined,
 close: bool = false,
 weight: u4 = 5,
 views: u10 = 0,
 sticky: bool = false,
 focused: u32 = 0,
 border_updated: bool = false,
-border: *const util.Color = &config.border_normal,
+border: util.Color = undefined,
 visible_updated: bool = false,
 visible: bool = false,
 floating_updated: bool = false,
@@ -50,6 +55,8 @@ pub fn create(window_manager: *WindowManager, river_window: *river.WindowV1) *Se
 
     river_window.setListener(*Self, river_window_listener, self);
     self.link.init();
+
+    self.changeConfig(&self.window_manager.configw.?.config);
 
     log.debug("{f} has been created.", .{self});
     return self;
@@ -125,18 +132,18 @@ fn river_window_listener(_: *river.WindowV1, event: river.WindowV1.Event, self: 
             self.switchFullscreen(false);
         },
         .app_id => |data| {
-            self.changeIcon(data.app_id);
             if (self.app_id) |app_id| self.allocator.free(app_id);
             self.app_id = null;
             if (data.app_id) |new_app_id| {
-                self.app_id = self.allocator.dupe(u8, std.mem.span(new_app_id)) catch unreachable;
+                self.app_id = self.allocator.dupeZ(u8, std.mem.span(new_app_id)) catch unreachable;
             }
+            self.updateIcon();
         },
         .title => |data| {
             if (self.title) |title| self.allocator.free(title);
             self.title = null;
             if (data.title) |new_title| {
-                self.title = self.allocator.dupe(u8, std.mem.span(new_title)) catch unreachable;
+                self.title = self.allocator.dupeZ(u8, std.mem.span(new_title)) catch unreachable;
             }
         },
         .parent => |data| {
@@ -187,7 +194,14 @@ pub fn init(self: *Self) void {
     self.river_window.useSsd();
     self.river_window.setTiled(.{ .top = true, .bottom = true, .left = true, .right = true });
     self.river_window.proposeDimensions(0, 0);
-    self.river_window.setBorders(.{ .top = true, .bottom = true, .left = true, .right = true }, config.border_width, self.border.r, self.border.g, self.border.b, self.border.a);
+    self.river_window.setBorders(
+        .{ .top = true, .bottom = true, .left = true, .right = true },
+        if (self.config.border_width) |border_width| border_width else Config.default.border_width.?,
+        self.border.r,
+        self.border.g,
+        self.border.b,
+        self.border.a,
+    );
     self.river_window.hide();
 }
 
@@ -199,7 +213,14 @@ pub fn manage(self: *Self) void {
 
     if (self.border_updated) {
         self.border_updated = false;
-        self.river_window.setBorders(.{ .top = true, .bottom = true, .left = true, .right = true }, config.border_width, self.border.r, self.border.g, self.border.b, self.border.a);
+        self.river_window.setBorders(
+            .{ .top = true, .bottom = true, .left = true, .right = true },
+            if (self.config.border_width) |border_width| border_width else Config.default.border_width.?,
+            self.border.r,
+            self.border.g,
+            self.border.b,
+            self.border.a,
+        );
     }
 
     if (self.visible_updated) {
@@ -316,16 +337,21 @@ pub fn updateSticky(self: *Self) void {
     self.updateVisible();
 }
 
+pub fn changeConfig(self: *Self, config: *const Config) void {
+    self.config = config;
+    self.updateBorder();
+    self.updateIcon();
+}
+
 pub fn updateBorder(self: *Self) void {
-    var border = &config.border_normal;
+    var border = Self.border_normal;
     if (self.focused != 0) {
-        border = &config.border_focused;
+        border = Self.border_focused;
         if (self.sticky) {
-            border = &config.border_sticky;
+            border = Self.border_sticky;
         }
     }
-    if (border == self.border) return;
-
+    if (border.a == self.border.a and border.r == self.border.r and border.g == self.border.g and border.b == self.border.b) return;
     self.border = border;
     self.border_updated = true;
 }
@@ -390,12 +416,13 @@ pub fn switchFloating(self: *Self, floating_or_null: ?bool) void {
     }
 }
 
-pub fn changeIcon(self: *Self, id: ?[*:0]const u8) void {
-    var icon = config.app_icon_fallback;
-    if (id) |app_id| {
-        for (&config.app_icons) |*app_icon| {
-            if (std.mem.orderZ(u8, app_icon.id, app_id) == .eq) {
-                icon = app_icon.icon;
+pub fn updateIcon(self: *Self) void {
+    var icon = if (self.config.icon_app_fallback) |icon_app_fallback| icon_app_fallback.ptr else Config.default.icon_app_fallback.?.ptr;
+    if (self.app_id) |app_id| {
+        const icon_app = if (self.config.icon_app) |icon_app| icon_app else Config.default.icon_app.?;
+        for (icon_app) |*app_icon| {
+            if (std.mem.orderZ(u8, app_icon.id.ptr, app_id) == .eq) {
+                icon = app_icon.icon.ptr;
                 break;
             }
         }
