@@ -145,6 +145,11 @@ fn river_seat_listener(_: *river.SeatV1, event: river.SeatV1.Event, self: *Self)
                         break;
                     }
                 }
+                if (window.buttons[0].hit(self.x, self.y)) {
+                    self.focus(window);
+                } else if (window.buttons[1].hit(self.x, self.y)) {
+                    window.switchSticky(null);
+                }
             } else {
                 var output_iterator = self.window_manager.outputs.iterator(.forward);
                 while (output_iterator.next()) |output| {
