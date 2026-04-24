@@ -1,8 +1,11 @@
 const std = @import("std");
+const posix = std.posix;
 const fcft = @import("fcft");
 const pixman = @import("pixman");
 
 pub const log = std.log.scoped(.bridge);
+
+pub const POLLFDS_NUM = 3;
 
 pub fn getEnv(allocator: std.mem.Allocator, name: []const u8) ?[]u8 {
     return std.process.getEnvVarOwned(allocator, name) catch |err| {
@@ -68,20 +71,46 @@ pub const Rect = struct {
     }
 };
 
-pub fn spawn(command: []const []const u8) !void {
-    const child = try std.heap.c_allocator.create(std.process.Child);
-    errdefer std.heap.c_allocator.destroy(child);
-
-    child.* = std.process.Child.init(command, std.heap.c_allocator);
-    try child.spawn();
-
-    const thread = try std.Thread.spawn(.{}, wait, .{child});
-    thread.detach();
+pub fn prepareSpawn() void {
+    const sig_ign = std.posix.Sigaction{
+        .handler = .{ .handler = std.posix.SIG.IGN },
+        .mask = std.posix.sigemptyset(),
+        .flags = 0,
+    };
+    std.posix.sigaction(std.posix.SIG.CHLD, &sig_ign, null);
 }
 
-fn wait(child: *std.process.Child) void {
-    _ = child.wait() catch {};
-    std.heap.c_allocator.destroy(child);
+pub fn spawn(cmd: []const []const u8) void {
+    if (cmd.len == 0) return;
+    if (cmd[0].len == 0) return;
+
+    if (posix.fork() catch unreachable == 0) {
+        _ = posix.setsid() catch unreachable;
+
+        var fd: i32 = 3;
+        while (fd < 3 + POLLFDS_NUM) : (fd += 1) {
+            _ = std.os.linux.close(fd);
+        }
+
+        const dev_null_fd = posix.openZ("/dev/null", .{ .ACCMODE = .RDWR }, 0) catch unreachable;
+        _ = posix.dup2(dev_null_fd, posix.STDOUT_FILENO) catch unreachable;
+        _ = posix.dup2(dev_null_fd, posix.STDERR_FILENO) catch unreachable;
+
+        const sig_dfl = std.posix.Sigaction{
+            .handler = .{ .handler = std.posix.SIG.DFL },
+            .mask = std.posix.sigemptyset(),
+            .flags = 0,
+        };
+        std.posix.sigaction(std.posix.SIG.CHLD, &sig_dfl, null);
+
+        if (std.posix.fork() catch unreachable == 0) {
+            const argv_buf = std.heap.c_allocator.allocSentinel(?[*:0]const u8, cmd.len, null) catch unreachable;
+            for (cmd, 0..) |arg, i| argv_buf[i] = (std.heap.c_allocator.dupeZ(u8, arg) catch unreachable).ptr;
+            std.posix.execvpeZ(argv_buf[0].?, argv_buf, std.c.environ) catch {};
+            std.posix.exit(1);
+        }
+        std.posix.exit(0);
+    }
 }
 
 pub fn getFont(name: [*:0]const u8, dpi: i32) *fcft.Font {

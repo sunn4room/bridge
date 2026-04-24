@@ -37,7 +37,7 @@ pub fn main() !void {
     _ = linux.inotify_add_watch(ntf_fd, window_manager.river_home, linux.IN.CLOSE_WRITE | linux.IN.MOVED_TO);
     defer posix.close(ntf_fd);
 
-    var pollfds = [3]posix.pollfd{
+    var pollfds = [util.POLLFDS_NUM]posix.pollfd{
         .{
             .fd = sig_fd,
             .events = posix.POLL.IN,

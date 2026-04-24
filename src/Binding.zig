@@ -140,7 +140,7 @@ fn execute(self: *Self) void {
             }
         },
         .spawn => |cmd| {
-            util.spawn(cmd) catch {};
+            util.spawn(cmd);
         },
         .iterate_window_weight => |dir| {
             if (seat.focused) |window| {
@@ -293,7 +293,7 @@ fn execute(self: *Self) void {
                     if (window.title) |title| title else "",
                 }, 0) catch unreachable;
                 defer self.allocator.free(info);
-                util.spawn(&.{ "notify-send", "Window Info", info }) catch {};
+                util.spawn(&.{ "notify-send", "Window Info", info });
             }
         },
         .quit => {

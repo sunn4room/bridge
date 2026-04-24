@@ -106,8 +106,9 @@ pub fn startup(self: *Self) void {
     } else if (self.river_xkb_config_name == null) {
         log.err("Global object 'river_xkb_config' is missing.", .{});
     } else {
+        util.prepareSpawn();
         const cmd_startup = if (self.config.cmd_startup) |cmd_startup| cmd_startup else Config.default.cmd_startup.?;
-        for (cmd_startup) |cmd| util.spawn(cmd) catch {};
+        for (cmd_startup) |cmd| util.spawn(cmd);
         self.river_window_manager.setListener(*Self, river_window_manager_listener, self);
         self.river_input_manager.setListener(*Self, river_input_manager_listener, self);
         self.river_libinput_config.setListener(*Self, river_libinput_config_listener, self);
