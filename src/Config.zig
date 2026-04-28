@@ -52,6 +52,7 @@ pub const Map = struct {
         change_output_view: u4,
         close_window,
         toggle_window_sticky,
+        disable_windows_sticky,
         toggle_window_fullscreen,
         enable_window_floating,
         disable_window_floating,

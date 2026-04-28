@@ -114,6 +114,7 @@
 
         .{ .modifiers = .{ .mod4 = true }, .trigger = .{ .keysym = "d" }, .action = .close_window },
         .{ .modifiers = .{ .mod4 = true }, .trigger = .{ .keysym = "s" }, .action = .toggle_window_sticky },
+        .{ .modifiers = .{ .mod4 = true, .shift = true }, .trigger = .{ .keysym = "s" }, .action = .disable_windows_sticky },
         .{ .modifiers = .{ .mod4 = true }, .trigger = .{ .keysym = "a" }, .action = .toggle_window_fullscreen },
         .{ .modifiers = .{ .mod4 = true }, .trigger = .{ .button = .left }, .action = .enable_window_floating },
         .{ .modifiers = .{ .mod4 = true }, .trigger = .{ .button = .right }, .action = .disable_window_floating },

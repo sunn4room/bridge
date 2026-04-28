@@ -261,6 +261,18 @@ fn execute(self: *Self) void {
         .toggle_window_sticky => {
             if (seat.focused) |window| window.switchSticky(null);
         },
+        .disable_windows_sticky => {
+            if (seat.focused) |window| {
+                if (window.placed) |output| {
+                    var window_iterator = window_manager.windows.iterator(.forward);
+                    while (window_iterator.next()) |each_window| {
+                        if (each_window.placed == output) {
+                            each_window.switchSticky(false);
+                        }
+                    }
+                }
+            }
+        },
         .toggle_window_fullscreen => {
             if (seat.focused) |window| window.switchFullscreen(null);
         },
